@@ -12,6 +12,9 @@ from pathlib import Path
 
 
 def smoke(command):
+    runtime=subprocess.run(command+['--check-runtime'],capture_output=True,text=True,timeout=30,check=True)
+    evidence=json.loads(runtime.stdout)
+    assert evidence['yt_dlp'] and evidence['ffmpeg'].startswith('ffmpeg version')
     with tempfile.TemporaryDirectory(prefix='scenetrace-smoke-') as folder:
         env=dict(os.environ,SCENETRACE_DATA=folder)
         proc=subprocess.Popen(command+['--no-browser'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

@@ -1,6 +1,7 @@
 """Single-instance Windows launcher and loopback HTTP service."""
 import argparse
 import ctypes
+import http.client
 import json
 import logging
 import logging.handlers
@@ -10,7 +11,6 @@ import signal
 import sys
 import threading
 import time
-import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -131,9 +131,13 @@ class Instance:
                 value=json.loads(self.path.read_text())
                 u=urlsplit(value['url'])
                 if u.scheme!='http' or u.hostname!='127.0.0.1':return None
-                opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-                with opener.open(value['url']+'/health',timeout=.5) as r:
-                    health=json.load(r)
+                connection=http.client.HTTPConnection('127.0.0.1',u.port,timeout=.5)
+                try:
+                    connection.request('GET','/health')
+                    response=connection.getresponse()
+                    health=json.loads(response.read(4096))
+                finally:
+                    connection.close()
                 if health.get('app')=='SceneTrace' and health.get('instance')==value['instance']:
                     return value['url']
             except Exception as exc:
@@ -151,6 +155,14 @@ def main():
             print(json.dumps(worker(json.load(sys.stdin))),flush=True)
         except Exception:
             sys.exit(1)
+        return
+    if '--check-runtime' in sys.argv:
+        import subprocess
+        import yt_dlp.version
+        from .media import ffmpeg_path
+        result=subprocess.run([ffmpeg_path(),'-version'],capture_output=True,text=True,timeout=10,
+                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),check=True)
+        print(json.dumps({'yt_dlp':yt_dlp.version.__version__,'ffmpeg':result.stdout.splitlines()[0]}))
         return
     parser=argparse.ArgumentParser()
     parser.add_argument('--no-browser',action='store_true')
