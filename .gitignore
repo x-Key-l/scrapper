@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+release/
+*.spec
+.venv/
+*.sqlite3*
+instance.json
+*.log
+artifacts/
+node_modules/
+live-results.json
