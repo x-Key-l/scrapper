@@ -65,7 +65,7 @@ def smoke(command):
             address=wait_ready()
             reopened=post(address,'state',{})
             assert reopened['settings']['onboarded'] and reopened['saved'][0]['title']=='Forest Portal'
-            assert reopened['settings']['destination']==folder
+            assert Path(reopened['settings']['destination']).samefile(folder)
             post(address,'shutdown',{})
             proc.wait(timeout=25)
             assert proc.returncode==0
