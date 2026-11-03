@@ -1,0 +1,26 @@
+SCENETRACE - WINDOWS 10/11 x64
+
+1. Right-click the ZIP and choose Extract All.
+2. Open the extracted SceneTrace folder.
+3. Double-click SceneTrace.exe.
+4. Your browser opens automatically. No commands or installations are needed.
+
+Keep SceneTrace.exe and the _internal folder together.
+
+Universal Search: search connected catalogs together.
+Memory Search: describe a forgotten video.
+Database Hub: test, configure, connect or import databases.
+Link Analyzer: inspect a public video link and its available formats.
+Download Center: follow authorized transfers and open completed files.
+
+Double-click the executable again to reopen a running session.
+Choose Quit SceneTrace in the sidebar to stop it.
+Closing only the browser tab leaves the app and downloads running.
+
+If startup fails, extract the whole ZIP again to a writable folder.
+Check whether antivirus quarantined required runtime files.
+Open Settings and export diagnostics if the interface opens.
+Personal settings: %LOCALAPPDATA%\SceneTrace
+
+See README.md and docs/HELP.md.
+The first package is a release candidate pending owner acceptance.

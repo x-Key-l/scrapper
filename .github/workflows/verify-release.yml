@@ -1,0 +1,95 @@
+name: Verify and package SceneTrace
+on:
+  push:
+    branches: [main, 'build/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned test and runtime dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Functional tests, including actual HTTP and media processing
+        run: python -m pytest -q --junitxml=test-results.xml
+      - name: Source application process smoke test
+        run: python scripts/smoke.py
+      - name: Real public source verification
+        run: python scripts/live_check.py
+      - name: Build self-contained Windows package
+        if: runner.os == 'Windows'
+        run: python scripts/build.py
+      - name: Smoke the actual packaged executable
+        if: runner.os == 'Windows'
+        run: python scripts/smoke.py --exe dist/SceneTrace/SceneTrace.exe
+      - name: Stage Windows ZIP and notices
+        if: runner.os == 'Windows'
+        run: python scripts/package_release.py
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ runner.os }}
+          path: |
+            test-results.xml
+            live-results.json
+      - name: Upload Windows package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SceneTrace-Windows-x64
+          path: |
+            SceneTrace-Windows-x64.zip
+            SceneTrace-Windows-x64.sha256
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python -m pip install -r requirements.txt
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps --only-shell
+      - name: Exercise the real browser application
+        run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-layouts
+          path: artifacts/
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test, browser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SceneTrace-Windows-x64
+          path: package
+      - name: Publish verified Windows prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v2.0.0-rc.$GITHUB_RUN_NUMBER"
+          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 --target "$GITHUB_SHA" --title "SceneTrace 2.0 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md

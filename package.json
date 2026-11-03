@@ -1,0 +1,7 @@
+{
+  "name": "scenetrace-qa",
+  "private": true,
+  "description": "Browser test tools only; Node.js is not used by the shipped application.",
+  "scripts": {"test:ui": "node scripts/ui-test.cjs"},
+  "devDependencies": {"playwright": "1.58.2"}
+}
