@@ -62,6 +62,18 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   assert.equal(await page.locator('#import-categories').inputValue(),'archive');
   await page.getByRole('button',{name:'Import and index →'}).click();
   await page.getByText('Import Nested collection · Finished',{exact:false}).waitFor({timeout:15000});
+  const tvmaze=page.locator('#page .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})});
+  await tvmaze.getByRole('button',{name:'Configure',exact:true}).click();
+  page.once('dialog',d=>d.accept());
+  await page.getByRole('button',{name:'Remove source',exact:true}).click();
+  await page.getByRole('button',{name:'Find More Sources ↗',exact:true}).click();
+  await page.getByRole('textbox',{name:'Describe the database you need'}).fill('television database');
+  await page.getByRole('button',{name:'Find sources',exact:true}).click();
+  const discovered=page.locator('#discovered .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})});
+  await discovered.getByRole('button',{name:'Enable connector',exact:true}).click();
+  await page.getByRole('button',{name:'Close dialog'}).click();
+  await page.getByRole('button',{name:'Database Hub',exact:true}).click();
+  await page.locator('#page .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})}).waitFor();
   for(const label of ['Universal Search','Link Analyzer','Download Center','Settings','Home']){
    await page.getByRole('button',{name:label,exact:true}).first().click();
    assert(await page.locator('h1').count()>0);
