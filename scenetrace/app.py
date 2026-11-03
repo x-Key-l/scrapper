@@ -79,6 +79,11 @@ class App:
 
     def test_source(self, ident):
         s = self.source(ident)
+        def save_health():
+            current = self.store.source(ident)
+            if current:
+                current.update({k:s[k] for k in ('health','last_sync','last_error') if k in s})
+                self.store.put_source(current)
         try:
             if s['kind']=='local':
                 p = importing.preview(s['local_path'],s.get('table',''),s.get('items_path',''))
@@ -90,9 +95,9 @@ class App:
             s.update(health='Verified',last_sync=time.time(),last_error='')
         except Exception as exc:
             s.update(health='Unavailable',last_error=str(exc) if isinstance(exc,ValueError) else 'Connection failed. Check internet access and provider availability.')
-            self.store.put_source(s)
+            save_health()
             return {'ok':False,'message':s['last_error']}
-        self.store.put_source(s)
+        save_health()
         return {'ok':True,'message':f'Connection verified; {count} sample records received.','count':count}
 
     def refresh(self, ident):

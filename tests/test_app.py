@@ -99,3 +99,16 @@ def test_source_failure_not_global_server_failure(server):
         result=json.loads(call(server,'/api/search',{'query':'nature','sources':['tvmaze']})[2])
     assert result['sources'][0]['status']=='unavailable'
     assert call(server,'/health')[0]==200
+
+
+def test_connection_test_does_not_overwrite_concurrent_configuration(server):
+    def provider(*args):
+        current=server.app.store.source('tvmaze')
+        current.update(name='My television catalog',enabled=False)
+        server.app.store.put_source(current)
+        return [],False
+    with patch('scenetrace.sources.search',side_effect=provider):
+        assert server.app.test_source('tvmaze')['ok']
+    actual=server.app.store.source('tvmaze')
+    assert actual['name']=='My television catalog' and not actual['enabled']
+    assert actual['health']=='Verified'

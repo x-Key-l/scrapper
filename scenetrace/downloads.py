@@ -163,8 +163,9 @@ class DownloadManager:
                 # Keep transfer partials for recovery, remove incomplete conversions.
                 Path(j['temporary']).unlink(missing_ok=True)
             finally:
-                j.pop('_running', None)
-                self.persist(j)
+                with self.lock:
+                    j.pop('_running', None)
+                    self.persist(j)
                 self.queue.task_done()
 
     def _direct(self, j):
