@@ -45,6 +45,23 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await page.getByRole('textbox',{name:'Filter saved library'}).fill('does not exist');
   assert.equal(await page.locator('#saved-results .card').count(),0);
   await page.getByRole('textbox',{name:'Filter saved library'}).fill('');
+  // Previewing a nested JSON export must preserve its selected records path and metadata.
+  await page.getByRole('button',{name:'Database Hub',exact:true}).click();
+  await page.getByRole('button',{name:'Import database',exact:true}).click();
+  await page.locator('#import-file').setInputFiles({name:'nested.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({payload:{items:[{id:9,title:'Deep Archive',description:'An archival video'}]}}))});
+  await page.locator('#import-name').waitFor();
+  await page.locator('#import-name').fill('Nested collection');
+  await page.locator('#import-role').selectOption('hybrid');
+  await page.locator('#import-categories').fill('archive');
+  await page.locator('#import-table').fill('payload.items');
+  await page.getByRole('button',{name:'Update preview',exact:true}).click();
+  await page.locator('#map-title option[value="title"]').waitFor({state:'attached'});
+  assert.equal(await page.locator('#import-table').inputValue(),'payload.items');
+  assert.equal(await page.locator('#import-name').inputValue(),'Nested collection');
+  assert.equal(await page.locator('#import-role').inputValue(),'hybrid');
+  assert.equal(await page.locator('#import-categories').inputValue(),'archive');
+  await page.getByRole('button',{name:'Import and index →'}).click();
+  await page.getByText('Import Nested collection · Finished',{exact:false}).waitFor({timeout:15000});
   for(const label of ['Universal Search','Link Analyzer','Download Center','Settings','Home']){
    await page.getByRole('button',{name:label,exact:true}).first().click();
    assert(await page.locator('h1').count()>0);

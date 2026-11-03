@@ -57,7 +57,8 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
     for _ in range(6):
         p, host, port, ip = target(url)
         if host != original_host:
-            extra = {k: v for k, v in extra.items() if k.lower() not in ('authorization', 'x-api-key', 'api-key')}
+            # Custom API-key header names must not leak to a redirect recipient.
+            extra = {k: v for k, v in extra.items() if k.lower() in ('range', 'if-range', 'accept', 'content-type')}
         conn = PinnedHTTPS(host, port, ip, timeout) if p.scheme == 'https' else http.client.HTTPConnection(ip, port, timeout=timeout)
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,

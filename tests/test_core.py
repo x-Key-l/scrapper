@@ -334,3 +334,24 @@ def test_disk_space_checked_before_queueing(store,tmp_path):
         with patch('shutil.disk_usage',return_value=type('Disk',(),{'free':1})()):
             with pytest.raises(ValueError):add_job(m,tmp_path)
     finally:m.close()
+
+
+def test_custom_credentials_removed_on_cross_host_redirect():
+    class Redirect:
+        status=302
+        def getheader(self,key,default=None):return 'https://other.example/data' if key=='Location' else default
+    class Success:
+        status=200
+    first=type('Conn',(),{})()
+    second=type('Conn',(),{})()
+    from unittest.mock import Mock
+    for c,r in ((first,Redirect()),(second,Success())):
+        c.request=Mock();c.getresponse=Mock(return_value=r);c.close=Mock()
+    def resolved(value):
+        p=urlsplit(value)
+        return p,p.hostname,443,'93.184.216.34'
+    with patch('scenetrace.network.target',side_effect=resolved),patch('scenetrace.network.PinnedHTTPS',side_effect=[first,second]):
+        network.open_url('https://source.example/data',headers={'X-Custom-Secret':'private','Authorization':'Bearer private','Range':'bytes=2-'})
+    sent=second.request.call_args[0][3]
+    assert 'X-Custom-Secret' not in sent and 'Authorization' not in sent
+    assert sent['Range']=='bytes=2-'

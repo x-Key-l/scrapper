@@ -76,7 +76,7 @@ def validate(config, previous=None):
             if name not in c and name in previous:
                 c[name] = previous[name]
     header = c.get('auth_header', 'Authorization')
-    if not re.fullmatch(r'[A-Za-z0-9-]+', header) or header.lower() in ('host', 'cookie', 'content-length', 'connection', 'proxy-authorization'):
+    if not re.fullmatch(r'[A-Za-z0-9-]+', header) or header.lower() in ('host', 'cookie', 'content-length', 'connection', 'proxy-authorization', 'range', 'if-range', 'accept', 'content-type', 'user-agent'):
         raise ValueError('Use Authorization or a provider API key header.')
     if any('\r' in str(c.get(k, '')) or '\n' in str(c.get(k, '')) for k in ('token', 'auth_prefix')):
         raise ValueError('Invalid authentication header.')
