@@ -197,6 +197,10 @@ class Instance:
 
 def main():
     if '--worker' in sys.argv:
+        # yt-dlp creates its own client context. Keep the override in its isolated process.
+        if sys.platform == 'win32':
+            import truststore
+            truststore.inject_into_ssl()
         from .media import worker
         try:
             print(json.dumps(worker(json.load(sys.stdin))),flush=True)

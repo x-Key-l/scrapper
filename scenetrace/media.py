@@ -28,9 +28,6 @@ def ffmpeg_path():
 
 
 def worker(request):
-    if sys.platform == 'win32':
-        import truststore
-        truststore.inject_into_ssl()
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
