@@ -65,11 +65,14 @@ class DownloadManager:
             raise ValueError('There is not enough free space in the destination.')
         key = uuid.uuid4().hex
         ext = fmt['ext'] if output == 'original' else output
-        name = safe_name(info['title'])+'.'+ext
-        final = folder / name
+        name = safe_name(info['title'])
+        suffix = '.' + fmt['ext']
+        if name.lower().endswith(suffix.lower()):
+            name = name[:-len(suffix)]
+        final = folder / (name + '.' + ext)
         # Reserve a final path atomically so concurrent jobs cannot overwrite each other.
         for n in range(1000000):
-            candidate = final if n == 0 else folder/(safe_name(info['title'])+f' ({n}).'+ext)
+            candidate = final if n == 0 else folder/(name+f' ({n}).'+ext)
             try:
                 with candidate.open('xb'):
                     pass
@@ -174,7 +177,7 @@ class DownloadManager:
         if offset and j.get('total') and offset == j['total']:
             j['bytes'] = offset
             return
-        h = {'Range':f'bytes={offset}-'} if offset else {}
+        h = {'Range':f'bytes={offset}-'}
         if offset and j.get('etag'):
             h['If-Range'] = j['etag']
         for attempt in range(3):

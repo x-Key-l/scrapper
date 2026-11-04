@@ -12,6 +12,8 @@ from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
 
+USER_AGENT = 'SceneTrace/3.0 (desktop video discovery; https://github.com/x-Key-l)'
+
 
 class SourceError(ValueError):
     pass
@@ -115,7 +117,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
         conn = PinnedHTTPS(host, port, ip, timeout) if p.scheme == 'https' else http.client.HTTPConnection(ip, port, timeout=timeout)
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,
-                         {'Host': p.netloc, 'User-Agent': 'SceneTrace/3.0 (desktop video discovery)', 'Accept-Encoding': 'identity', **extra})
+                         {'Host': p.netloc, 'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity', **extra})
             r = conn.getresponse()
             if r.status in (301, 302, 303, 307, 308):
                 location = r.getheader('Location')
