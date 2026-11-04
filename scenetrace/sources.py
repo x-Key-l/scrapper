@@ -26,7 +26,7 @@ GALLERY = [
     dict(id='peertube', name='PeerTube / Sepia Search', kind='peertube', role='media', categories=['video', 'educational', 'music'], description='Search public federated videos. Individual instances decide availability.', website='https://sepiasearch.org', docs='https://docs.joinpeertube.org/api-rest-reference.html', endpoint='https://sepiasearch.org', auth='None'),
     dict(id='tmdb', name='TMDB', kind='tmdb', role='metadata', categories=['movie', 'series'], description='Movie and television metadata. Optional personal API read token required.', website='https://www.themoviedb.org', docs='https://developer.themoviedb.org/reference/search-multi', endpoint='https://api.themoviedb.org/3', auth='API Read Access Token'),
 ]
-KINDS = {x['kind'] for x in GALLERY} | {'rest', 'graphql', 'feed', 'local'}
+KINDS = {x['kind'] for x in GALLERY} | {'rest', 'graphql', 'feed', 'local', 'website'}
 ALIASES = {
     'id': ['id', 'identifier', 'uuid', 'guid'], 'title': ['title', 'name', 'original_title'],
     'description': ['description', 'summary', 'synopsis', 'overview', 'plot'],
@@ -60,7 +60,7 @@ def validate(config, previous=None):
     allowed = {'id', 'name', 'kind', 'role', 'categories', 'description', 'website', 'docs', 'endpoint', 'auth',
                'enabled', 'token', 'mapping', 'items_path', 'query_param', 'page_param', 'page_size_param',
                'page_size', 'graphql', 'variables', 'params', 'auth_header', 'auth_prefix', 'since_param',
-               'local_path', 'table', 'health', 'last_sync', 'last_error', 'last_query', 'sync'}
+               'local_path', 'table', 'health', 'last_sync', 'last_error', 'last_query', 'sync', 'web_config', 'video_checks', 'sample_query'}
     c = {k: copy.deepcopy(v) for k, v in config.items() if k in allowed}
     c['id'] = previous['id'] if previous else 'user-' + uuid.uuid4().hex
     c['name'] = text(c.get('name'))[:160]
@@ -77,6 +77,9 @@ def validate(config, previous=None):
     for name in ('variables', 'params'):
         if name in c and not isinstance(c[name], dict):
             raise ValueError(name + ' must be a JSON object.')
+    if c['kind'] == 'website':
+        from .websites import validate as validate_website
+        c['web_config'] = validate_website(c.get('web_config') or {})
     c['enabled'] = bool(c.get('enabled', True))
     c.setdefault('health', 'Untested')
     c.setdefault('categories', ['video'])
@@ -202,6 +205,9 @@ def _search(s, q, page, memory=None):
     def rec(ident, title, **kw):
         return record(sid, ident, title, source_name=name, **kw)
     more = False
+    if kind == 'website':
+        from .websites import search as search_website
+        return search_website(s, q, page)
     if kind in ('pokemon-tv', 'open-animation'):
         from .open_catalog import search as search_open_catalog
         return search_open_catalog(s, q, page)

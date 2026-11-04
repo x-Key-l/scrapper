@@ -10,7 +10,8 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function run() {
     const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'scenetrace-watch-'));
-    const proc = spawn('python', ['-m', 'scenetrace', '--no-browser'], {
+    const executable = process.env.SCENETRACE_QA_EXE;
+    const proc = spawn(executable || 'python', executable ? ['--no-browser'] : ['-m', 'scenetrace', '--no-browser'], {
         env: {...process.env, SCENETRACE_DATA: folder}, stdio: 'ignore',
     });
     let browser;
@@ -92,6 +93,32 @@ async function run() {
         await page.getByText('Download this video', {exact: true}).waitFor();
         assert.deepEqual(errors, []);
         console.log('Caminandes: searchable series, exact episode, actual video frames and advancing playback, speed and eligible download shown.');
+        await page.getByRole('button', {name: 'Close dialog'}).click();
+        await page.getByRole('button', {name: 'Video Sources', exact: true}).click();
+        await page.getByRole('button', {name: 'Add Video Website', exact: true}).click();
+        await page.getByLabel('Website URL', {exact: true}).fill('https://www.w3schools.com/html/html5_video.asp');
+        await page.getByRole('button', {name: 'Inspect website', exact: true}).click();
+        await page.getByLabel('Name', {exact: true}).fill('W3Schools video example');
+        await page.getByLabel('Sample title or keywords', {exact: true}).fill('HTML Video');
+        await page.getByRole('button', {name: 'Test integration', exact: true}).click();
+        await page.getByText('playback · Direct media bytes checked', {exact: true}).waitFor();
+        await page.screenshot({path: 'artifacts/website-test.png', fullPage: true});
+        await page.getByRole('button', {name: 'Save website', exact: true}).click();
+        await page.getByRole('heading', {name: 'W3Schools video example', exact: true}).waitFor();
+        await page.getByRole('button', {name: 'Universal Video Search', exact: true}).click();
+        await page.locator('#watch-source').selectOption({label: 'W3Schools video example'});
+        await page.getByRole('textbox', {name: 'Video search'}).fill('HTML Video');
+        await page.getByRole('button', {name: 'Search', exact: true}).click();
+        await page.getByRole('button', {name: 'View video options'}).click();
+        await page.locator('.episode').first().click();
+        await page.locator('#episode-video').evaluate(async element => {
+            element.muted = true;
+            await element.play();
+        });
+        await page.waitForFunction(() => document.querySelector('#episode-video')?.currentTime > 0.2);
+        await page.screenshot({path: 'artifacts/added-website-playing.png', fullPage: true});
+        console.log('W3Schools: inspected, tested, saved, searched, and played a real HTML video without a media URL or API.');
+        assert.deepEqual(errors, []);
     } finally {
         if (browser) await browser.close();
         if (address) {

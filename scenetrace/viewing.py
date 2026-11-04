@@ -221,9 +221,10 @@ class Viewing:
         except (OSError, ValueError) as exc:
             return dict(base, message=str(exc) if isinstance(exc, ValueError) else 'The video host is unavailable. Try its original page.')
 
-    def play_media(self, episode, base):
+    def play_media(self, episode, base, source=None):
         value = episode['url']
-        source = self.app.store.source(episode.get('website')) if episode.get('website') else None
+        if source is None and episode.get('website'):
+            source = self.app.store.source(episode['website'])
         if episode['kind'] == 'peertube':
             info = self.peertube(value)
         elif episode['kind'] == 'website' and source:
@@ -251,12 +252,109 @@ class Viewing:
         if output['playback'] == 'external' and info.get('embed'):
             output.update(playback='embed', embed=info['embed'], message='The source provides an official player. Open the source page if it cannot play here.')
         if output['playback'] == 'external':
-            output['message'] = last_error or 'This exact video page is available in its source player.'
-        if info.get('download_allowed') and formats:
-            analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=formats, analyzed=time.time())
+            output['message'] = last_error or 'Open the exact source page to check playback.'
+        if output['playback'] == 'direct':
+            subtitles = []
+            for track in info.get('subtitles', []):
+                try:
+                    content, _, final = network.fetch(track['url'], limit=512 * 1024)
+                    if content.lstrip(b'\xef\xbb\xbf \n\r').startswith(b'WEBVTT'):
+                        token = self.ticket('stream', {'url': final, 'mime': 'text/vtt'})
+                        subtitles.append(dict(track, url='/media/' + token))
+                except (OSError, ValueError):
+                    continue
+            output['subtitles'] = subtitles
+        eligible = [f for f in formats if f.get('permitted', True)]
+        if info.get('download_allowed') and eligible:
+            analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=eligible, analyzed=time.time())
             safe = self.app.register_analysis(analysis)
             output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])
         return output
+
+    def check(self, source, query, sample_url=''):
+        from . import websites
+        checks = {'search': 'Unchecked', 'discovery': 'Unchecked', 'playback': 'Unchecked', 'download': 'Unchecked'}
+        rows = []
+        try:
+            rows, _ = sources.search(source, query, 1)
+            checks['search'] = f'{len(rows)} results returned' if rows else 'No matches for sample'
+            selected = next((row for row in rows if row.get('media_urls')), None)
+            if not selected:
+                return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': 'No video pages matched. Adjust the search method or selectors.'}
+            if source['kind'] == 'website':
+                value = url(sample_url) if sample_url else selected['url']
+                if sample_url and not websites.same_origin(value, source['endpoint']):
+                    raise ValueError('The sample page must be on this website.')
+                episodes = websites.episodes(source, value)
+                checks['discovery'] = f'{len(episodes)} episode pages' if episodes else 'Exact video or detail page found'
+                episode = episodes[0] if episodes else episode_row(value, selected['title'], source['name'])
+                episode = dict(episode, source=source['name'], kind='website')
+                base = {'episode': episode['title'], 'source': source['name'], 'original': episode['url'],
+                        'playback': 'external', 'formats': []}
+                if youtube_id(episode['url']):
+                    player = self.play(self.ticket('episode', episode))
+                else:
+                    player = self.play_media(episode, base, source)
+            else:
+                episodes = self.episodes(selected)
+                checks['discovery'] = f'{len(episodes)} episode or video pages'
+                player = self.play(self.ticket('episode', episodes[0])) if episodes else {}
+            playback = player.get('playback')
+            checks['playback'] = {
+                'direct': 'Direct media bytes checked', 'embed': 'Official embed offered',
+                'external': 'Source page only · playback unverified',
+            }.get(playback, 'No viewing option checked')
+            checks['download'] = 'Eligible formats exposed' if player.get('formats') else 'No eligible format found'
+            if playback == 'external' and player.get('message'):
+                checks['detail'] = player['message']
+            return {'ok': True, 'checks': checks, 'results': rows[:6], 'message': 'Review the sample video and playback options.',
+                    'sample': player}
+        except (OSError, ValueError) as error:
+            message = str(error) if isinstance(error, ValueError) else 'The website did not complete the request.'
+            checks['error'] = message
+            return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': message}
+
+    def test_website(self, body):
+        previous = self.app.store.source(body.get('id'))
+        if previous and previous['kind'] != 'website':
+            raise ValueError('Choose a custom website to edit.')
+        query = body.get('query', '')
+        if not isinstance(query, str) or not 2 <= len(query.strip()) <= 200:
+            raise ValueError('Enter a sample title or keywords to test this website.')
+        config = sources.validate(dict(
+            kind='website', role='media', name=body.get('name'), endpoint=body.get('endpoint'),
+            website=body.get('endpoint'), web_config=body.get('web_config'), mapping=body.get('mapping') or {},
+            categories=body.get('categories') or ['video'], enabled=previous.get('enabled', True) if previous else True,
+            sample_query=query,
+        ), previous)
+        result = self.check(config, query, body.get('sample_url', ''))
+        if result['ok']:
+            config['video_checks'] = result['checks']
+            result['save_ticket'] = self.ticket('website-config', config)
+        return result
+
+    def save_website(self, ticket):
+        config = self.get_ticket(ticket, 'website-config')
+        self.app.store.put_source(config)
+        with self.app.store.db() as conn:
+            conn.execute('DELETE FROM cache')
+            conn.execute('DELETE FROM search_fts WHERE id IN (SELECT id FROM records WHERE source=?)', (config['id'],))
+            conn.execute('DELETE FROM records WHERE source=?', (config['id'],))
+        self.tickets.pop(ticket, None)
+        return {'id': config['id'], 'name': config['name']}
+
+    def test_source(self, ident, query=''):
+        source = self.app.source(ident)
+        sample = query.strip() or source.get('sample_query') or {
+            'pokemon-tv': 'Pokémon', 'open-animation': 'Caminandes', 'archive': 'Big Buck Bunny',
+            'commons': 'Caminandes', 'peertube': 'Blender',
+        }.get(source['kind'], 'nature')
+        result = self.check(source, sample)
+        current = self.app.store.source(ident)
+        if current:
+            current['video_checks'] = result['checks']
+            self.app.store.put_source(current)
+        return result
 
     def peertube(self, value):
         p = urlsplit(value)

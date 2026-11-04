@@ -12,3 +12,5 @@ instance.json
 artifacts/
 node_modules/
 live-results.json
+
+watch-results.json

@@ -19,7 +19,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(address);
   await page.getByRole('button',{name:'Start discovering →'}).click();
-  await page.getByRole('heading',{name:/Every video leaves/}).waitFor();
+  await page.getByRole('heading',{name:/Find a video/}).waitFor();
   await page.getByRole('button',{name:'Video Sources',exact:true}).click();
   await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.getByRole('heading',{name:'More sources. More possibilities.'}).waitFor();

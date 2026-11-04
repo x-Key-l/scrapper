@@ -81,6 +81,8 @@ class App:
 
     def test_source(self, ident):
         s = self.source(ident)
+        if s['kind'] == 'tmdb' and not s.get('token'):
+            return {'ok':False,'message':'TMDB is an optional metadata catalog. Add an API Read Access Token in Configure to enable it.'}
         def save_health():
             current = self.store.source(ident)
             if current:
@@ -281,6 +283,12 @@ class App:
                 raise ValueError('Select a title first.')
             return self.viewing.details(item)
         if path=='/api/watch/play': return self.viewing.play(body.get('ticket', ''))
+        if path=='/api/watch/inspect':
+            from .websites import inspect
+            return inspect(body.get('url', ''))
+        if path=='/api/watch/test-website': return self.viewing.test_website(body)
+        if path=='/api/watch/save-website': return self.viewing.save_website(body.get('ticket', ''))
+        if path=='/api/watch/test-source': return self.viewing.test_source(body.get('id'), body.get('query', ''))
         if path=='/api/network/tls': return network.tls_diagnostics('https://archive.org/metadata/BigBuckBunny_328')
 
         if path=='/api/search':
@@ -305,7 +313,7 @@ class App:
         if path=='/api/discover':
             key=self.store.setting('brave_key','')
             if key.startswith('dpapi:'): key=protect(key,True)
-            return discovery.find(str(body.get('query','')),key)
+            return discovery.find(str(body.get('query','')),key,video_only=body.get('video_only') is True)
         if path=='/api/analyze': return self.analyze(body.get('url',''))
         if path=='/api/resolve': return self.resolve(body.get('record'))
         if path=='/api/download/add': return self.download(body)

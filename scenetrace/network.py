@@ -63,6 +63,8 @@ def target(url):
         if not ips or any(not ipaddress.ip_address(ip).is_global for ip in ips):
             raise UnsafeURL('Private, reserved, and mixed DNS addresses are blocked.')
         return p, host, port, ips[0]
+    except UnsafeURL:
+        raise
     except (ValueError, UnicodeError, socket.gaierror) as e:
         raise UnsafeURL('The public hostname could not be safely resolved.') from e
 

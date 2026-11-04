@@ -59,3 +59,86 @@ def test_untrusted_certificate_is_rejected_over_real_tls(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+def test_public_html_search_episodes_and_playback_metadata_over_http():
+    """Use an actual HTTP origin and route only its test hostname to loopback."""
+    from urllib.parse import parse_qs, urlsplit
+    from scenetrace import websites
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            path = urlsplit(self.path)
+            pages = {
+                '/': '<title>Anime fixture</title><form action="/search"><input name="q"></form>',
+                '/series/pocket': '<div class="episodes"><a href="/episode/1">Episode 1</a><a href="/episode/2">Episode 2</a></div>',
+                '/episode/1': '<title>Episode 1</title><video src="/media/one.mp4"><track src="/subs.vtt" srclang="en"></video><a download href="/media/one.mp4">Download</a>',
+            }
+            if path.path == '/search':
+                query = parse_qs(path.query)
+                assert query['q'] == ['Pocket Monsters'] and query['page'] == ['2']
+                body = '<article class="show"><a href="/series/pocket"><span>Pocket Monsters</span></a><img src="/cover.jpg"></article>'
+            else:
+                body = pages[path.path]
+            data = body.encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    original = network.target
+
+    def target(value):
+        if urlsplit(value).hostname == 'fixture.example':
+            return urlsplit(value), 'fixture.example', server.server_port, '127.0.0.1'
+        return original(value)
+
+    try:
+        with patch('scenetrace.network.target', side_effect=target):
+            detected = websites.inspect('http://fixture.example/')
+            assert detected['query_param'] == 'q'
+            cfg = websites.validate(dict(detected, page_param='page', result_selector='.show',
+                                         link_selector='a', title_selector='span', episode_selector='.episodes a'))
+            source = {'id': 'fixture', 'name': 'Anime fixture', 'endpoint': 'http://fixture.example/', 'web_config': cfg,
+                      'categories': ['anime']}
+            rows, more = websites.search(source, 'Pocket Monsters', 2)
+            assert more and rows[0]['title'] == 'Pocket Monsters'
+            assert rows[0]['thumbnail'] == 'http://fixture.example/cover.jpg'
+            listing = websites.episodes(source, rows[0]['url'])
+            assert [row['number'] for row in listing] == ['1', '2']
+            player = websites.resolve(source, listing[0]['url'])
+            assert player['formats'][0]['url'] == 'http://fixture.example/media/one.mp4'
+            assert player['download_allowed'] and player['subtitles'][0]['language'] == 'en'
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_website_url_pattern_cannot_redirect_search_to_other_origin():
+    from scenetrace import websites
+    cfg = websites.validate({'strategy': 'html', 'search_pattern': 'https://unrelated.example/?q={query}'})
+    with pytest.raises(ValueError, match='configured website origin'):
+        websites.search_url({'endpoint': 'https://fixture.example', 'web_config': cfg}, 'test', 1)
+
+
+def test_xml_video_sitemap_and_nonvideo_entries():
+    from scenetrace import websites
+    xml = b'<urlset xmlns:v="urn:video"><url><loc>https://site.example/about</loc></url><url><loc>https://site.example/episode/1</loc><v:video><v:title>Episode one</v:title></v:video></url></urlset>'
+    assert list(websites.sitemap_rows(xml, 'https://site.example', ''))[0]['title'] == 'Episode one'
+    with pytest.raises(ValueError, match='entities'):
+        list(websites.sitemap_rows(b'<!DOCTYPE a [<!ENTITY e "test">]><urlset/>', 'https://site.example', ''))
+
+
+def test_source_discovery_keeps_metadata_out_of_video_suggestions():
+    from scenetrace.discovery import find
+    result = find('searchable anime episode catalogs', video_only=True)
+    assert result['providers']
+    assert all(source['role'] != 'metadata' and source['tested'] is False for source in result['providers'])

@@ -15,10 +15,11 @@ def run():
             report['catalogs'].append({'source':'TMDB','status':'not tested','reason':'Optional owner API token not supplied.'})
             continue
         try:
-            rows,more=sources.search(source,'Naruto' if source['id']=='anilist' else 'nature')
+            query = {'anilist':'Naruto', 'pokemon-tv':'Pocket Monsters', 'open-animation':'Caminandes'}.get(source['id'], 'nature')
+            rows, more = sources.search(source, query)
             assert rows, 'The provider returned no usable records for the sample query.'
             assert all(r['title'] and r['source_id']==source['id'] for r in rows)
-            report['catalogs'].append({'source':source['name'],'status':'verified','count':len(rows),'sample_title':rows[0]['title']})
+            report['catalogs'].append({'source':source['name'],'status':'search verified','count':len(rows),'sample_title':rows[0]['title']})
         except Exception as exc:
             report['catalogs'].append({'source':source['name'],'status':'unavailable','reason':str(exc)[:200]})
     proxy=network.start_proxy()

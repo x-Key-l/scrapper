@@ -2,7 +2,7 @@
 
 const watchState = {
     query: '', category: '', page: 1, mode: '', busy: false, more: false,
-    rows: [], sources: [], episodes: [], selected: null, request: 0, result: null,
+    rows: [], sources: [], episodes: [], selected: null, request: 0, playRequest: 0,
 };
 
 function watchCard(record, index) {
@@ -75,6 +75,7 @@ async function searchVideos(query, mode, page = 1) {
 
 async function showViewing(record) {
     watchState.selected = record;
+    watchState.playRequest++;
     const details = [record.year, record.edition, record.release_season, record.episode_count && record.episode_count + ' catalog episodes'].filter(Boolean);
     dialog(record.title, '<div class="watch-title">' + (link(record.thumbnail)
         ? '<img class="watch-cover" src="' + esc(link(record.thumbnail)) + '" alt="">' : '') +
@@ -94,7 +95,7 @@ async function showViewing(record) {
             : empty('No viewing options found', 'Try another title edition or add a video website that lists these episodes.')) +
             result.errors.map(error => '<p class="meta">' + esc(error.source + ' · ' + error.message) + '</p>').join('');
     } catch (error) {
-        if ($('watch-episodes')) $('watch-episodes').innerHTML = '<div class="notice error">' + esc(error.message) + '</div>';
+        if (record === watchState.selected && $('watch-episodes')) $('watch-episodes').innerHTML = '<div class="notice error">' + esc(error.message) + '</div>';
     }
 }
 
@@ -103,7 +104,7 @@ function watchDownload(result) {
     const formats = result.formats.map(format => '<option value="' + esc(format.id) + '">' +
         esc([format.height && format.height + 'p', format.label, format.ext.toUpperCase(),
             format.video && !format.audio ? 'video only' : null, bytes(format.size)].filter(Boolean).join(' · ')) + '</option>').join('');
-    return '<details class="panel"><summary>Download this video</summary><form data-watch-form="download">' +
+    return '<details class="panel"><summary>Download this video</summary><form data-watch-form="download" data-analysis="' + esc(result.analysis_id) + '">' +
         '<div class="form-grid"><div><label for="watch-format">Format and resolution</label><select id="watch-format" name="format_id">' +
         formats + '</select></div><div><label for="watch-output">Output</label><select id="watch-output" name="output">' +
         '<option value="original">Original</option><option value="mp4">Convert to MP4</option><option value="mp3">Audio MP3</option>' +
@@ -117,11 +118,11 @@ async function selectEpisode(index) {
     const episode = watchState.episodes[index];
     const player = $('watch-player');
     if (!episode || !player) return;
+    const request = ++watchState.playRequest;
     player.innerHTML = '<div class="loading">Checking the episode source…</div>';
     try {
         const result = await api('watch/play', {ticket: episode.ticket});
-        if (player !== $('watch-player')) return;
-        watchState.result = result;
+        if (request !== watchState.playRequest || player !== $('watch-player')) return;
         let playback = '';
         if (result.playback === 'direct' && /^\/media\/[A-Za-z0-9_-]+$/.test(result.stream)) {
             playback = '<video id="episode-video" controls playsinline preload="metadata" src="' + esc(link(result.direct_url) || result.stream) + '">' +
@@ -153,6 +154,7 @@ async function selectEpisode(index) {
         });
         player.scrollIntoView({block: 'nearest'});
     } catch (error) {
+        if (request !== watchState.playRequest || player !== $('watch-player')) return;
         player.innerHTML = '<div class="notice error">' + esc(error.message) + '</div><p>' +
             external(episode.url, 'Open exact video at source') + '</p>';
     }
@@ -166,7 +168,7 @@ function videoSourcesPage() {
             ['Playback', capability.playback], ['Download', capability.download],
         ].map(([label, value]) => '<li>' + esc(label) + ' · ' + esc(value || 'Unchecked on this PC') + '</li>').join('');
         return '<article class="source-card"><h3>' + esc(source.name) + '</h3><p>' + esc(source.description) +
-            '</p><ul class="capabilities">' + checks + '</ul>' + (capability.error ? '<p class="inline-error">' + esc(capability.error) + '</p>' : '') +
+            '</p><ul class="capabilities">' + checks + '</ul>' + ((capability.error || capability.detail) ? '<p class="inline-error">' + esc(capability.error || capability.detail) + '</p>' : '') +
             '<div class="actions"><label class="toggle"><input type="checkbox" data-enable="' + esc(source.id) + '"' +
             (source.enabled ? ' checked' : '') + '>Enabled</label><button data-watch="test-source" data-id="' + esc(source.id) +
             '">Test viewing</button>' + (source.kind === 'website' ? '<button data-watch="edit-website" data-id="' +
@@ -226,7 +228,7 @@ document.addEventListener('submit', async event => {
             await searchVideos(values.query, state.view);
         }
         if (action === 'download') {
-            await api('download/add', {...values, analysis_id: watchState.result.analysis_id, authorized: values.authorized === 'on'});
+            await api('download/add', {...values, analysis_id: form.dataset.analysis, authorized: values.authorized === 'on'});
             toast('Download queued. Track it under Downloads.');
         }
     } catch (error) {
@@ -242,3 +244,177 @@ $('dialog').addEventListener('close', () => {
 });
 
 start();
+
+const websiteFields = [
+    ['search_pattern', 'Search URL pattern', '/search?q={query}&page={page}'],
+    ['query_param', 'Search parameter', 'q'],
+    ['page_param', 'Page parameter', 'page'],
+    ['result_selector', 'Result selector', 'article.video'],
+    ['title_selector', 'Title selector', '.title'],
+    ['link_selector', 'Detail link selector', 'a[href]'],
+    ['thumbnail_selector', 'Thumbnail selector', 'img'],
+    ['description_selector', 'Description selector', '.description'],
+    ['episode_selector', 'Episode list selector', '.episode-list li'],
+    ['episode_title_selector', 'Episode title selector', '.episode-name'],
+    ['episode_link_selector', 'Episode link selector', 'a[href]'],
+    ['playback_selector', 'Media selector', 'video source[src]'],
+    ['items_path', 'JSON result array path', 'results.items'],
+    ['path_prefix', 'Result path prefix', '/videos/'],
+];
+
+function websiteWizard(existing = null, website = '') {
+    if (existing) {
+        showWebsiteConfig({...existing, ...existing.web_config, query: existing.sample_query || ''});
+        return;
+    }
+    dialog('Add Video Website',
+        '<p class="meta">1 Website → 2 Inspect → 3 Configure → 4 Test → 5 Save</p>' +
+        '<p>Enter a public website, a video listing or a feed. SceneTrace will look for an available search method.</p>' +
+        '<form data-site-form="inspect"><label for="website-url">Website URL</label><input id="website-url" name="url" type="url" required value="' +
+        esc(website) + '" placeholder="https://example.org/videos"><div class="actions"><button class="primary">Inspect website</button>' +
+        '<button type="button" data-site="manual">Configure manually</button></div><div id="website-inspection"></div></form>');
+}
+
+function showWebsiteConfig(config) {
+    const strategies = [
+        ['html', 'Public search form or HTML results'], ['listing', 'HTML video listing'],
+        ['json', 'Public JSON search or listing'], ['feed', 'RSS, Atom or Media RSS'], ['sitemap', 'Video sitemap'],
+    ];
+    const options = strategies.map(([key, label]) =>
+        '<option value="' + key + '"' + (key === config.strategy ? ' selected' : '') + '>' + label + '</option>').join('');
+    const fields = websiteFields.map(([key, label, placeholder]) =>
+        '<div><label for="website-' + key + '">' + label + '</label><input id="website-' + key + '" name="' + key +
+        '" placeholder="' + esc(placeholder) + '" value="' + esc(config[key] || '') + '"></div>').join('');
+    const mapping = ['title', 'url', 'description', 'thumbnail', 'alternatives', 'year', 'id'].map(key =>
+        '<div><label for="website-map-' + key + '">JSON ' + key + ' field</label><input id="website-map-' + key +
+        '" name="map_' + key + '" placeholder="' + key + '" value="' + esc(config.mapping?.[key] || '') + '"></div>').join('');
+    dialog(config.id ? 'Edit Video Website' : 'Configure Video Website',
+        '<p class="meta">3 Configure → 4 Test → 5 Save</p>' +
+        (config.findings || []).map(finding => '<div class="notice">' + esc(finding) + '</div>').join('') +
+        '<form data-site-form="test" data-id="' + esc(config.id || '') + '"><div class="form-grid">' +
+        '<div><label for="website-name">Name</label><input id="website-name" name="name" required value="' + esc(config.name || '') + '"></div>' +
+        '<div><label for="website-endpoint">Website or endpoint</label><input id="website-endpoint" name="endpoint" type="url" required value="' +
+        esc(config.endpoint || '') + '"></div><div><label for="website-strategy">Connection method</label><select id="website-strategy" name="strategy">' +
+        options + '</select></div><div><label for="website-categories">Categories</label><input id="website-categories" name="categories" value="' +
+        esc((config.categories || ['video']).join(', ')) + '" placeholder="anime, animation, video"></div></div>' +
+        '<details class="panel"><summary>Advanced website configuration</summary><p class="meta">Use {query} and {page} in URL patterns. ' +
+        'Set CSS selectors relative to each result or episode. JSON mappings use dotted field paths.</p><div class="form-grid">' +
+        fields + mapping + '</div><label class="check"><input type="checkbox" name="render_browser"' +
+        (config.render_browser ? ' checked' : '') + '> Render public pages in an isolated Edge or Chromium profile. ' +
+        'The website runs its JavaScript only when you enable this option.</label></details>' +
+        '<label for="website-query">Sample title or keywords</label><input id="website-query" name="query" required minlength="2" value="' +
+        esc(config.query || '') + '"><label for="website-sample">Optional exact video or series page on this website</label>' +
+        '<input id="website-sample" name="sample_url" type="url"><div class="actions"><button class="primary">Test integration</button>' +
+        (config.id ? '<button type="button" data-site="remove" data-id="' + esc(config.id) + '">Remove website</button>' : '') +
+        '</div><div id="website-test"></div></form>');
+}
+
+function websiteDiscovery() {
+    dialog('Find More Sources', '<p>Search the connector gallery and, if configured, Brave Search for additional video websites.</p>' +
+        '<form data-site-form="discover" class="searchbar"><input name="query" aria-label="Describe the video source" required minlength="2" ' +
+        'placeholder="Anime websites with searchable episode catalogs"><button class="primary">Find sources</button></form>' +
+        '<div id="website-discovery"></div>');
+}
+
+function showWebsiteTest(result) {
+    const sample = result.sample;
+    const direct = sample?.playback === 'direct' ? link(sample.direct_url) : '';
+    return '<h3>Integration preview</h3><p>' + esc(result.message) + '</p><ul class="capabilities">' +
+        Object.entries(result.checks).map(([key, value]) => '<li>' + esc(key + ' · ' + value) + '</li>').join('') +
+        '</ul><ul>' + result.results.map(row => '<li>' + external(row.url, row.title) + '</li>').join('') + '</ul>' +
+        (direct ? '<video controls preload="none" class="episode-frame" src="' + esc(direct) + '"></video>' : '') +
+        (sample ? '<p>' + external(sample.original, 'Open sample source page') + '</p>' : '') +
+        (result.save_ticket ? '<button type="button" class="primary" data-site="save" data-ticket="' +
+            esc(result.save_ticket) + '">Save website</button>' : '');
+}
+
+let discoveredWebsites = [];
+document.addEventListener('submit', async event => {
+    const form = event.target;
+    const action = form.dataset.siteForm;
+    if (!action) return;
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(form));
+    const button = form.querySelector('button[type="submit"], button.primary');
+    if (button) button.disabled = true;
+    try {
+        if (action === 'inspect') {
+            $('website-inspection').innerHTML = '<p class="loading">Inspecting public website…</p>';
+            showWebsiteConfig(await api('watch/inspect', values));
+        } else if (action === 'test') {
+            $('website-test').innerHTML = '<p class="loading">Searching and checking a sample page…</p>';
+            const webConfig = Object.fromEntries(websiteFields.map(([key]) => [key, values[key] || '']));
+            Object.assign(webConfig, {strategy: values.strategy, render_browser: values.render_browser === 'on'});
+            const mapping = Object.fromEntries(Object.entries(values)
+                .filter(([key, value]) => key.startsWith('map_') && value)
+                .map(([key, value]) => [key.slice(4), value]));
+            const result = await api('watch/test-website', {
+                id: form.dataset.id || undefined, name: values.name, endpoint: values.endpoint,
+                categories: values.categories.split(',').map(s => s.trim()).filter(Boolean),
+                query: values.query, sample_url: values.sample_url, web_config: webConfig, mapping,
+            });
+            $('website-test').innerHTML = showWebsiteTest(result);
+        } else if (action === 'discover') {
+            $('website-discovery').innerHTML = '<p class="loading">Looking for sources…</p>';
+            const result = await api('discover', {...values, video_only: true});
+            discoveredWebsites = [...result.providers, ...result.candidates];
+            $('website-discovery').innerHTML = '<p>' + esc(result.notice) + '</p><p>' +
+                external(result.fallback_url, 'Search the web') + '</p><div class="source-grid">' +
+                discoveredWebsites.map((source, index) => '<article class="source-card"><h3>' +
+                    esc(source.name) + '</h3><p>' + esc(source.description) + '</p><p class="meta">' +
+                    esc(source.kind ? 'Built-in connector · Test playback in Video Sources' : 'Discovered website · Integration unverified') +
+                    '</p><button type="button" data-site="' + (source.kind ? 'enable' : 'candidate') +
+                    '" data-index="' + index + '">' + (source.kind ? 'Enable and test' : 'Inspect website') + '</button></article>').join('') + '</div>';
+        }
+    } catch (error) {
+        const output = $('website-test') || $('website-inspection') || $('website-discovery');
+        if (output) output.innerHTML = '<p class="notice error" role="alert">' + esc(error.message) + '</p>';
+    } finally {
+        if (button) button.disabled = false;
+    }
+});
+
+document.addEventListener('input', event => {
+    if (event.target.closest('form[data-site-form="test"]') && !event.target.closest('#website-test')) {
+        $('website-test')?.querySelector('[data-site="save"]')?.remove();
+    }
+});
+
+document.addEventListener('click', async event => {
+    const button = event.target.closest('button[data-site]');
+    if (!button) return;
+    button.disabled = true;
+    try {
+        const action = button.dataset.site;
+        if (action === 'manual') {
+            const value = $('website-url').value;
+            const parsed = link(value);
+            if (!parsed) throw Error('Enter a public website URL first.');
+            showWebsiteConfig({endpoint: parsed, name: new URL(parsed).hostname, strategy: 'html'});
+        } else if (action === 'save') {
+            const source = await api('watch/save-website', {ticket: button.dataset.ticket});
+            $('dialog').close();
+            await reload();
+            nav('websites');
+            toast(source.name + ' is ready for search.');
+        } else if (action === 'remove' && confirm('Remove this website from SceneTrace?')) {
+            await api('source/delete', {id: button.dataset.id});
+            $('dialog').close();
+            await reload(true);
+        } else if (action === 'candidate') {
+            websiteWizard(null, discoveredWebsites[Number(button.dataset.index)].website);
+        } else if (action === 'enable') {
+            const candidate = discoveredWebsites[Number(button.dataset.index)];
+            const savedSource = await api('source/save', {...candidate, enabled: true});
+            $('dialog').close();
+            await reload(true);
+            const test = await api('watch/test-source', {id: savedSource.source.id});
+            await reload(true);
+            toast(test.message, !test.ok);
+        }
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+});
