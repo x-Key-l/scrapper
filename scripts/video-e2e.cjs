@@ -97,7 +97,11 @@ async function run() {
         await page.getByRole('button', {name: 'Video Sources', exact: true}).click();
         await page.getByRole('button', {name: 'Add Video Website', exact: true}).click();
         await page.getByLabel('Website URL', {exact: true}).fill('https://www.w3schools.com/html/html5_video.asp');
-        await page.getByRole('button', {name: 'Inspect website', exact: true}).click();
+        const [inspection] = await Promise.all([
+            page.waitForResponse(response => response.url() === address + '/api/watch/inspect'),
+            page.getByRole('button', {name: 'Inspect website', exact: true}).click(),
+        ]);
+        assert(inspection.ok(), 'W3Schools inspection failed: ' + await inspection.text());
         await page.getByLabel('Name', {exact: true}).fill('W3Schools video example');
         await page.getByLabel('Sample title or keywords', {exact: true}).fill('HTML Video');
         await page.getByRole('button', {name: 'Test integration', exact: true}).click();
