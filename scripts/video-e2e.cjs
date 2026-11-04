@@ -110,7 +110,8 @@ async function run() {
         await page.getByRole('button', {name: 'Save website', exact: true}).click();
         await page.getByRole('heading', {name: 'W3Schools video example', exact: true}).waitFor();
         await page.getByRole('button', {name: 'Quick Search', exact: true}).click();
-        await page.locator('#watch-source').selectOption({label: 'W3Schools video example'});
+        try {await page.locator('#watch-source').selectOption({label: 'W3Schools video example'}, {timeout:10000});}
+        catch (error) {console.log('Saved source diagnosis', await page.evaluate(()=>state.data.sources.map(s=>({name:s.name,enabled:s.enabled,role:s.role,categories:s.categories}))));throw error;}
         await page.getByRole('textbox', {name: 'Video search'}).fill('HTML Video');
         await page.getByRole('button', {name: 'Search', exact: true}).click();
         await page.getByRole('button', {name: 'View video options'}).click();
@@ -125,15 +126,15 @@ async function run() {
         await page.getByRole('button', {name: 'Close dialog'}).click();
         await page.getByRole('button', {name: 'Deep Search', exact: true}).click();
         await page.getByRole('textbox', {name: 'Describe the video you remember'}).fill('llama Patagonia');
-        const chips = page.locator('[data-source]');
+        await page.getByText('Optional clues and source selection', {exact:true}).click();
+        const chips = page.locator('[data-deep-source]');
         for (let i = 0; i < await chips.count(); i++) {
             const chip = chips.nth(i);
-            if (await chip.getAttribute('data-source') !== 'open-animation') await chip.uncheck();
+            if (await chip.getAttribute('value') !== 'open-animation') await chip.uncheck();
         }
-        await page.getByRole('button', {name: /Follow the clues/}).click();
+        await page.getByRole('button', {name: 'Search deeply', exact: true}).click();
         await page.getByRole('heading', {name: 'Caminandes', exact: true}).waitFor();
-        await page.getByRole('button', {name: 'Details', exact: true}).click();
-        await page.getByRole('button', {name: /Find Video/i}).click();
+        await page.getByRole('button', {name: 'View video options', exact: true}).click();
         await page.getByRole('button', {name: /Episode 3 · Llamigos/}).waitFor();
         console.log('Deep Search: plot clues found Caminandes and led to the real episode list.');
         assert.deepEqual(errors, []);

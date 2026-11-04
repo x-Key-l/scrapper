@@ -298,6 +298,10 @@ class App:
         if path=='/api/deep/start': return self.search_sessions.start(body)
         if path=='/api/deep/poll': return self.search_sessions.poll(body.get('id'))
         if path=='/api/deep/cancel': return self.search_sessions.cancel(body.get('id'))
+        if path=='/api/watch/start':
+            return self.search_sessions.start(dict(body, sources=self.viewing.search_scope(body), mode='quick'))
+        if path=='/api/watch/poll':
+            return self.viewing.decorate(self.search_sessions.poll(body.get('id')), body.get('mode') == 'anime')
         if path=='/api/desktop/event':
             if body.get('action') == 'ready':
                 self.native_browser = True

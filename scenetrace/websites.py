@@ -291,8 +291,12 @@ def search(source, query, page=1):
                 href = final
                 title = node.get('title') or node.get('aria-label') or (title if cfg['title_selector'] else '') or (doc.title.get_text(strip=True) if doc.title else '')
             image = node_value(node, cfg['thumbnail_selector'] or 'img', ('src', 'data-src', 'poster')) or node.get('poster')
+            aliases = []
+            for names in node.select('[data-en], [data-jp]'):
+                aliases.extend(names.get(k) for k in ('data-en', 'data-jp') if names.get(k))
+            description = node_value(node, cfg['description_selector']) if cfg['description_selector'] else ''
             raw_rows.append(dict(title=title, url=href, thumbnail=image,
-                                 description=node_value(node, cfg['description_selector']) if cfg['description_selector'] else ''))
+                                 alternatives=list(dict.fromkeys(aliases)), year=description, description=description))
         raw_rows.extend(dict(title=v.get('name'), description=v.get('description'), url=v.get('url') or final,
                              thumbnail=v.get('thumbnailUrl')) for v in structured_videos(doc))
         if not raw_rows and strategy == 'html':
@@ -351,13 +355,16 @@ def episodes(source, value):
         return []
     doc, final = fetch_page(value, cfg['render_browser'])
     rows = {}
-    selector = cfg['episode_selector'] or 'a[href*="/episode/"], a[href*="?ep="], a[href*="/watch/"][data-number]'
+    selector = cfg['episode_selector'] or '.hk-epgrid a.hk-ep[data-ep][href], a[href*="/episode/"], a[href*="?ep="], a[href*="/watch/"][data-number]'
     for node in select(doc, selector):
         href = relative(final, node_value(node, cfg['episode_link_selector'], ('href', 'src', 'data-href')))
         name = node_value(node, cfg['episode_title_selector'])
+        number = node.get('data-ep') if re.fullmatch(r'\d+(?:\.\d+)?', node.get('data-ep', '')) else episode_number(name)
+        if node.get('data-name') and not cfg['episode_title_selector']:
+            name = node['data-name']
         if href and name and (same_origin(final, href) or official_episode(href)):
-            rows.setdefault(href, dict(url=href, title=name, number=episode_number(name)))
-    return list(rows.values())
+            rows.setdefault(href, dict(url=href, title=name, number=number))
+    return sorted(rows.values(), key=lambda row: (row['number'] is None, float(row['number'] or 0)))
 
 
 def resolve(source, value):

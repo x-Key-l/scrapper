@@ -14,6 +14,7 @@ def test_real_hianime_structure_upgrades_old_saved_selectors(monkeypatch):
     rows, _ = websites.search(source, 'Naruto', 1)
     assert len(rows) == 1 and rows[0]['title'] == 'Naruto'
     assert rows[0]['url'] == 'https://hianime.ms/details/naruto-e0a2e'
+    assert rows[0]['year'] == 2002 and 'NARUTO' in rows[0]['alternatives']
     assert websites.search_url(source, 'Naruto', 1) == 'https://hianime.ms/search?q=Naruto'
 
 
@@ -29,3 +30,16 @@ def test_structure_failure_is_distinct_from_genuine_no_results(monkeypatch):
     with pytest.raises(websites.WebsiteSearchError) as error:
         websites.check_restriction(websites.parse_page('<title>Just a moment...</title>'))
     assert error.value.code == 'service_restriction'
+
+
+def test_numbered_episode_pages_use_observed_public_attributes(monkeypatch):
+    source = dict(endpoint='https://hianime.ms/', web_config=websites.validate(dict(strategy='listing')))
+    page = websites.parse_page('''<div class="hk-epgrid">
+    <a class="hk-ep" data-ep="10" data-name="Later episode" href="/watch-naruto-episode-10-e0a2e">10</a>
+    <a class="hk-ep" data-ep="2" data-name="Earlier episode" href="/watch-naruto-episode-2-e0a2e">2</a>
+    </div>''')
+    monkeypatch.setattr(websites, 'fetch_page', lambda value, render=False:(page, value))
+    episodes = websites.episodes(source, 'https://hianime.ms/details/naruto-e0a2e')
+    assert [e['number'] for e in episodes] == ['2', '10']
+    assert episodes[0]['title'] == 'Earlier episode'
+    assert episodes[0]['url'] == 'https://hianime.ms/watch-naruto-episode-2-e0a2e'

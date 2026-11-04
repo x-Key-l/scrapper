@@ -9,9 +9,10 @@ const icons={home:'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',search:'M21 21l-6-6M18 10a8 8
 const navs=[['home','Home'],['browser','Browser'],['search','Quick Search'],['memory','Deep Search'],['anime','Anime'],['websites','Video Sources'],['link','Link Analyzer'],['downloads','Downloads'],['saved','Saved Library'],['history','History'],['settings','Settings']];
 const state={view:'home',data:null,results:[],analysis:null,query:'',mode:'search',page:1,statuses:[],notice:'',hasMore:false,hints:{},sourceIds:null,requestId:null,busy:false,filter:'all',upload:null,editor:null,editorFields:[]};
 let toastTimer;
+let reloadSequence=0,reloadApplied=0;
 function toast(message,error=false){$('toast').textContent=message;$('toast').className=error?'error':'';$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,error?9000:4200)}
 async function api(path,body={}){const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-SceneTrace':'local'},body:JSON.stringify(body)});let d;try{d=await r.json()}catch{throw Error('SceneTrace stopped responding. Reopen the application.')}if(!r.ok)throw Error(d.detail||'The operation could not finish.');return d}
-async function reload(render=false){state.data=await api('state');$('version').textContent=state.data.version;$('connection-count').textContent=state.data.sources.filter(s=>s.enabled&&s.role!=='metadata').length+' video sources';if(render)renderPage()}
+async function reload(render=false){const sequence=++reloadSequence;const data=await api('state');if(sequence<reloadApplied)return;reloadApplied=sequence;state.data=data;$('version').textContent=state.data.version;$('connection-count').textContent=state.data.sources.filter(s=>s.enabled&&s.role!=='metadata').length+' video sources';if(render)renderPage()}
 function nav(view){state.view=view==='hub'||navs.some(n=>n[0]===view)?view:'home';location.hash=state.view;renderPage();window.scrollTo({top:0});if(state.view==='history')loadHistory().catch(e=>toast(e.message,true));}
 function title(eye,heading,subtitle){return '<div class="eyebrow">'+esc(eye)+'</div><h1>'+esc(heading)+'</h1><p class="subtitle">'+esc(subtitle)+'</p>'}
 function empty(heading,description){return '<div class="empty"><b>'+esc(heading)+'</b>'+esc(description)+'</div>'}

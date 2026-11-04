@@ -97,7 +97,7 @@ class Viewing:
             raise ValueError('This viewing option expired. Open the video again.')
         return entry[2]
 
-    def search(self, body):
+    def search_scope(self, body):
         anime = body.get('mode') == 'anime'
         selected = body.get('sources')
         category = body.get('category') or ''
@@ -109,8 +109,14 @@ class Viewing:
             and (not category or category in s.get('categories', []))
             and (anime or s['role'] in ('media', 'hybrid'))
         ]
-        mode = 'search' if anime else 'media'
-        output = self.app.search.run(body.get('query', ''), ids, body.get('page', 1), mode)
+        return ids
+
+    def search(self, body):
+        output = self.app.search.run(body.get('query', ''), self.search_scope(body), body.get('page', 1))
+        return self.decorate(output, body.get('mode') == 'anime')
+
+    def decorate(self, output, anime=False):
+        active = self.app.store.sources(public=True)
         by_id = {s['id']: s for s in active}
         rows = []
         for item in output['results']:

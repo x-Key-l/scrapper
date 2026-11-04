@@ -5,7 +5,7 @@ import sys
 import tempfile
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scenetrace import websites, sources
+from scenetrace import websites, sources, network
 from scenetrace.app import App
 from scenetrace.deep_sources import retrieve
 from scenetrace.deep import understand, rank
@@ -14,6 +14,17 @@ from scenetrace.search import deduplicate
 out = Path('artifacts/v4-live')
 out.mkdir(parents=True, exist_ok=True)
 report = {'website_tests': [], 'deep_catalog_tests': []}
+report['api_diagnostics'] = []
+for endpoint in (
+    'https://itunes.apple.com/search?term=Jackie%20Chan&media=movie&entity=movie&country=US&limit=5',
+    'https://www.wikidata.org/w/api.php?action=wbsearchentities&search=Jackie%20Chan&language=en&type=item&limit=3&format=json',
+    'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=white%20hair%20teacher%20eye%20anime&format=json',
+):
+    try:
+        raw = network.json_request(endpoint)
+        report['api_diagnostics'].append({'url':endpoint, 'response':str(raw)[:3000]})
+    except Exception as error:
+        report['api_diagnostics'].append({'url':endpoint, 'error':str(error)})
 corpus = []
 with tempfile.TemporaryDirectory() as folder:
     app = App(folder, None)

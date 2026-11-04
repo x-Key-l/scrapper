@@ -6,14 +6,14 @@ from collections import Counter
 from difflib import SequenceMatcher
 
 STOP = set('i me my we our a an the and or is was were be been being this that those it its in on at to of for from by with without as then than but had have has watched saw remember years ago only about where who which he she they met main character show movie video series find looking like called some near into also very when can could would please dont know anime film old maybe think probably something'.split())
-STOP.update('him her his hers their them one people someone person discovers discover encounters encounter'.split())
+STOP.update('him her his hers their them one people someone person discovers discover encounters encounter whose'.split())
 GROUPS = [
     ('boy', 'young', 'child', 'kid'), ('girl', 'young', 'child'), ('creature', 'beast', 'monster', 'demon'),
     ('fighter', 'ninja', 'warrior', 'martial'), ('transported', 'portal', 'isekai', 'reincarnated'),
     ('world', 'realm'), ('underground', 'cave', 'cavern', 'descent'), ('forest', 'woods'),
     ('teacher', 'mentor', 'sensei', 'instructor', 'leader'), ('eye', 'eyepatch', 'mask', 'covered', 'headband'),
     ('criminal', 'crime', 'police', 'gang'), ('fight', 'battle', 'combat'), ('spirit', 'ghost', 'supernatural'),
-    ('notebook', 'book', 'diary'), ('death', 'kill', 'murder'), ('space', 'spaceship', 'alien'),
+    ('notebook', 'notepad', 'book', 'diary'), ('write', 'written', 'pen', 'writing'), ('death', 'kill', 'murder'), ('space', 'spaceship', 'alien'),
     ('robot', 'android', 'mecha'), ('animated', 'animation', 'anime'), ('school', 'academy', 'student'),
     ('inside', 'sealed', 'possessed', 'host'), ('white', 'silver', 'gray'), ('powerful', 'power', 'ability'),
 ]
@@ -81,7 +81,8 @@ def understand(query, hints=None):
 
 
 def similarity(a, b):
-    a, b = ' '.join(words(a)), ' '.join(words(b))
+    # Content words such as "movie", "season" and sequel numbers distinguish titles.
+    a, b = (' '.join(re.findall(r'[^\W_]+', normalized(value))) for value in (a, b))
     if not a or not b:
         return 0
     if a == b:
@@ -99,10 +100,8 @@ def rank(query, records, analysis=None):
     expanded = set(analysis.get('expanded') or wanted) - wanted
     documents = []
     for record in records:
-        people = ' '.join(str(x.get('name', '')) + ' ' + str(x.get('description', '')) if isinstance(x, dict) else str(x)
-                          for x in record.get('characters', []) + record.get('cast', []))
         documents.append(Counter(terms(record['title'] + ' ' + ' '.join(record.get('alternatives', [])) + ' ' +
-                                       record.get('description', '') + ' ' + ' '.join(record.get('genres', [])) + ' ' + people)))
+                                       record.get('description', '') + ' ' + ' '.join(record.get('genres', [])))))
     df = Counter(t for document in documents for t in document)
     avg = sum(sum(d.values()) for d in documents) / max(1, len(documents)) or 1
     ranked = []
@@ -114,13 +113,13 @@ def rank(query, records, analysis=None):
             idf = math.log(1 + (len(records)-df[term]+.5)/(df[term]+.5))
             score += idf * doc[term] * 2.2 / (doc[term]+1.2*(.25+.75*dl/avg))
         expanded_matches = expanded & doc.keys()
-        score += min(3., .22*len(expanded_matches))
+        score += min(8., sum(.5*math.log(1+(len(records)-df[t]+.5)/(df[t]+.5)) for t in expanded_matches))
         titles = [record['title']] + record.get('alternatives', [])
         similarities = [(similarity(query, t), t) for t in titles]
         sim, closest = max(similarities, default=(0., ''))
         title_match = False
         if analysis.get('title_like') and sim >= .66:
-            score += 18*sim**3
+            score += 45 if sim == 1 else 20*sim**3
             title_match = True
             evidence.append(('Exact title: ' if sim == 1 else 'Similar title: ') + closest)
         if matches:
@@ -131,23 +130,30 @@ def rank(query, records, analysis=None):
         if expanded_matches:
             evidence.append('Related terms: ' + ', '.join(sorted(expanded_matches)[:6]))
         for field, label, hint in (('characters', 'Character', analysis.get('character')), ('cast', 'Actor', analysis.get('actor'))):
+            people_scores = []
             for person in record.get(field, []):
                 name = person.get('name', '') if isinstance(person, dict) else person
                 description = person.get('description', '') if isinstance(person, dict) else ''
                 overlap = wanted & set(terms(name + ' ' + description))
                 person_terms = set(terms(name + ' ' + description))
+                person_score = 0
                 if field == 'characters' and analysis.get('character_description'):
                     groups = [set(stem(w) for w in group) for group in GROUPS]
                     group_hits = [g for g in groups if g & wanted and g & person_terms]
-                    score += min(8., 1.5*len(group_hits))
+                    person_score += min(8., 1.5*len(group_hits)) + len(overlap)
                     if any(g & {'teacher', 'mentor', 'sensei'} and g & wanted and g & person_terms for g in groups):
-                        score += 3
+                        person_score += 3
                 if hint and similarity(hint, name) >= .72:
-                    score += 7
+                    person_score += 14
                     evidence.append(label + ': ' + name)
                 elif len(overlap) >= 2:
-                    score += min(5., len(overlap))
+                    person_score += min(3., .5*len(overlap))
                     evidence.append(label + ' ' + name + ': ' + ', '.join(sorted(overlap)[:5]))
+                people_scores.append(person_score)
+            # A cast of eight people must not beat one exact character just by repetition.
+            score += max(people_scores, default=0)
+        if (analysis.get('character') or analysis.get('character_description')) and record.get('edition') == 'TV':
+            score += .6
         evidence.extend(record.get('retrieval_evidence', []))
         if analysis.get('genre') in record.get('genres', []):
             score += 1.5
