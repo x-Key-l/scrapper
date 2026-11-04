@@ -33,6 +33,11 @@ def fixture_server(fixture_video):
         def do_GET(self):self.respond(True)
         def respond(self,body):
             received.append(dict(self.headers))
+            if self.path == '/throttled.mp4' and len(received) == 1:
+                self.send_response(429)
+                self.send_header('Retry-After', '1')
+                self.end_headers()
+                return
             offset=int(self.headers.get('Range','bytes=0-').split('=')[1].split('-')[0])
             partial='Range' in self.headers
             self.send_response(206 if partial else 200)
@@ -71,11 +76,14 @@ def wait(manager,key):
     raise AssertionError('Fixture transfer timed out')
 
 
-@pytest.mark.parametrize('output',['original','mp4','mp3'])
-def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixture_video,output):
+@pytest.mark.parametrize('output,throttled',[('original',False),('mp4',False),('mp3',False),('original',True)])
+def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixture_video,output,throttled):
     value,received=fixture_server
+    if throttled:
+        value = value.replace('/sample.mp4', '/throttled.mp4')
     manager=DownloadManager(Store(tmp_path/'state'),'proxy',workers=1)
     try:
+        start = time.monotonic()
         job=manager.add({'title':'Fixture','url':value},{'id':'0','ext':'mp4','method':'direct','url':value,'size':len(fixture_video)},str(tmp_path),True,output)
         done=wait(manager,job['id'])
         path=Path(done['path'])
@@ -84,6 +92,8 @@ def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixtur
         check=subprocess.run([media.ffmpeg_path(),'-v','error','-i',str(path),'-f','null','-'],capture_output=True)
         assert check.returncode==0,check.stderr
         assert received
+        if throttled:
+            assert len(received) == 2 and time.monotonic() - start >= 1
     finally:manager.close()
 
 

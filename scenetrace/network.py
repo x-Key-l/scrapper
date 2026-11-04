@@ -7,6 +7,8 @@ import socket
 import ssl
 import sys
 import threading
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
 
@@ -17,6 +19,21 @@ class SourceError(ValueError):
 
 class UnsafeURL(SourceError):
     pass
+
+
+class RateLimitError(SourceError):
+    def __init__(self, value):
+        value = (value or '60')[:80].strip()
+        try:
+            self.delay = int(value)
+        except ValueError:
+            try:
+                retry = parsedate_to_datetime(value).astimezone(timezone.utc)
+                self.delay = round((retry - datetime.now(timezone.utc)).total_seconds())
+            except (ValueError, TypeError, OverflowError):
+                self.delay = 60
+        self.delay = max(1, self.delay)
+        super().__init__(f'Provider rate limit reached. Retry after {self.delay} seconds.')
 
 
 class TrustError(SourceError):
@@ -113,7 +130,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
                     method, data = 'GET', None
                 continue
             if r.status == 429:
-                raise SourceError('Provider rate limit reached. Retry after ' + str(r.getheader('Retry-After', '60'))[:20] + ' seconds.')
+                raise RateLimitError(r.getheader('Retry-After'))
             if r.status not in (200, 206):
                 raise SourceError(f'Source returned HTTP {r.status}. Check its status or credentials.')
             return conn, r, url

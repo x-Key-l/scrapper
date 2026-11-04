@@ -177,8 +177,19 @@ class DownloadManager:
         h = {'Range':f'bytes={offset}-'} if offset else {}
         if offset and j.get('etag'):
             h['If-Range'] = j['etag']
-        conn, response, _ = network.open_url(j['format']['url'], headers=h, timeout=20)
+        for attempt in range(3):
+            try:
+                conn, response, _ = network.open_url(j['format']['url'], headers=h, timeout=20)
+                break
+            except network.RateLimitError as error:
+                if attempt == 2 or error.delay > 15:
+                    raise
+                self.events[j['id']].wait(error.delay + .25)
+                self._check(j)
         try:
+            content_type = response.getheader('Content-Type', '').split(';')[0].lower()
+            if content_type in ('text/html', 'application/xhtml+xml', 'application/json'):
+                raise ValueError('The source returned a webpage instead of a media file.')
             if response.status == 206:
                 match = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+|\*)', response.getheader('Content-Range',''))
                 if not match or int(match[1]) != offset:

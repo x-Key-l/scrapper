@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
-from .viewing import Viewing, probe_file
+from .viewing import Viewing
 from .search import SearchEngine
 from .store import Store, protect
 
@@ -199,8 +199,6 @@ class App:
         fmt=next((f for f in a.get('formats',[]) if f['id']==body.get('format_id')),None)
         if not fmt:
             raise ValueError('Select an available quality and format.')
-        if a.get('download_allowed') and fmt.get('method') == 'direct':
-            probe_file(fmt['url'], browser=False)
         dest=body.get('destination') or self.store.setting('destination',str(self.folder))
         return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
 
