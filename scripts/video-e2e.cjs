@@ -27,7 +27,7 @@ async function run() {
             await sleep(100);
         }
         assert(address, 'SceneTrace did not start');
-        browser = await chromium.launch({headless: true});
+        browser = await chromium.launch({headless: true, args: ['--autoplay-policy=no-user-gesture-required']});
         const page = await browser.newPage({viewport: {width: 1366, height: 950}});
         page.setDefaultTimeout(45000);
         const errors = [];
@@ -64,10 +64,22 @@ async function run() {
             element.muted = true;
             await element.play();
         });
+        try {
         await page.waitForFunction(() => {
             const element = document.querySelector('#episode-video');
             return element && element.currentTime > 0.25 && element.videoWidth > 0;
-        });
+        }, null, {polling: 100, timeout: 20000});
+        } catch (error) {
+            console.log('Player diagnostics', await video.evaluate(element => ({
+                currentTime: element.currentTime, duration: element.duration, paused: element.paused,
+                readyState: element.readyState, networkState: element.networkState, seeking: element.seeking,
+                error: element.error?.message, width: element.videoWidth, buffered: Array.from(
+                    {length: element.buffered.length}, (_, i) => [element.buffered.start(i), element.buffered.end(i)]
+                ),
+            })));
+            await page.screenshot({path: 'artifacts/caminandes-player-diagnostics.png', fullPage: true});
+            throw error;
+        }
         await page.getByLabel('Speed', {exact: true}).selectOption('1.25');
         assert.equal(await video.evaluate(element => element.playbackRate), 1.25);
         await page.screenshot({path: 'artifacts/caminandes-playing.png', fullPage: true});

@@ -220,7 +220,7 @@ def test_mixed_dns_and_rebinding_protected():
 
 
 def test_network_connection_pins_ip_and_retains_tls_hostname():
-    with patch('socket.create_connection') as connect, patch('ssl.create_default_context') as context:
+    with patch('socket.create_connection') as connect, patch('scenetrace.network.tls_context') as context:
         conn=network.PinnedHTTPS('example.org',443,'93.184.216.34',5)
         conn.connect()
         assert connect.call_args[0][0]==('93.184.216.34',443)

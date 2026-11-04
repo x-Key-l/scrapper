@@ -42,7 +42,7 @@ def official_episode(value):
 def open_license(value):
     parsed = urlsplit(str(value or ''))
     return parsed.hostname in ('creativecommons.org', 'www.creativecommons.org') and bool(
-        re.match(r'^/(?:licenses/by(?:-sa|-nc|-nc-sa|-nd|-nc-nd)?/[0-9.]+|publicdomain/(?:zero|mark)/[0-9.]+)/?$', parsed.path)
+        re.match(r'^/(?:licenses/by(?:-sa|-nc|-nc-sa|-nd|-nc-nd)?/[0-9.]+|publicdomain/(?:zero|mark)/[0-9.]+)(?:/[a-z-]+)?/?$', parsed.path)
     )
 
 
@@ -244,7 +244,7 @@ class Viewing:
         for selected in playable[:4]:
             try:
                 checked = probe_file(selected['url'])
-                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.')
+                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.', quality=selected.get('height'), mime=checked['mime'])
                 break
             except (OSError, ValueError) as exc:
                 last_error = str(exc)
