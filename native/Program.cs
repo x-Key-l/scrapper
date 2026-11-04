@@ -41,7 +41,8 @@ namespace SceneTrace
             }
             catch (WebView2RuntimeNotFoundException)
             {
-                MessageBox.Show("The integrated browser needs Microsoft Edge WebView2 Runtime. SceneTrace will open in your default browser. Install WebView2 Evergreen from Microsoft to enable integrated tabs.", "SceneTrace", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")))
+                    MessageBox.Show("The integrated browser needs Microsoft Edge WebView2 Runtime. SceneTrace will open in your default browser. Install WebView2 Evergreen from Microsoft to enable integrated tabs.", "SceneTrace", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 Environment.ExitCode = 3;
             }
             catch (Exception error)
@@ -116,7 +117,10 @@ namespace SceneTrace
             Controls.Add(tabs);
             Controls.Add(tools);
             Controls.Add(bar);
-            tabs.SelectedIndexChanged += async (s, e) => await ActivateTab();
+            tabs.SelectedIndexChanged += async (s, e) => {
+                try { await ActivateTab(); }
+                catch (Exception) { status.Text = "This tab could not start. Refresh or open it externally."; }
+            };
             tabs.MouseDown += (s, e) => {
                 if (e.Button != MouseButtons.Middle) return;
                 for (int i = 0; i < tabs.TabCount; i++)
@@ -132,10 +136,9 @@ namespace SceneTrace
             };
             Shown += async (s, e) => await StartBrowser();
             FormClosing += (s, e) => { closing = true; activity.Stop(); };
-            FormClosed += async (s, e) => {
+            FormClosed += (s, e) => {
                 foreach (var tab in openTabs.ToArray()) DisposeTab(tab);
                 focusEvent?.Dispose();
-                try { await Post("shutdown", new { }); } catch { }
                 client.Dispose();
             };
         }
@@ -217,7 +220,8 @@ namespace SceneTrace
 
         private async Task EnsureTab(BrowserTab tab)
         {
-            if (tab.Closed || tab.Creating || tab.View != null) return;
+            while (tab.Creating && !tab.Closed) await Task.Delay(20);
+            if (tab.Closed || tab.View != null) return;
             tab.Creating = true;
             var view = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = BackColor };
             tab.View = view;
@@ -256,7 +260,7 @@ namespace SceneTrace
                     UpdateChrome(tab);
                 };
                 core.FrameNavigationStarting += (s, e) => {
-                    if (!tab.Trusted && !AllowedWebsite(e.Uri) && e.Uri != "about:blank" && !e.Uri.StartsWith("about:srcdoc")) e.Cancel = true;
+                    if (!tab.Trusted && !AllowedWebsite(e.Uri) && e.Uri != "about:blank" && !e.Uri.StartsWith("about:srcdoc") && !e.Uri.StartsWith("blob:https://") && !e.Uri.StartsWith("data:")) e.Cancel = true;
                 };
                 core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
                 core.WebResourceRequested += (s, e) => {
@@ -281,6 +285,7 @@ namespace SceneTrace
                 if (tab.Trusted) core.WebMessageReceived += ReceiveMessage;
                 core.Navigate(tab.Pending);
             }
+            catch { view.Dispose(); tab.View = null; throw; }
             finally { tab.Creating = false; }
         }
 
@@ -346,7 +351,8 @@ namespace SceneTrace
         private async Task FindText()
         {
             if (Current?.View?.CoreWebView2 == null || String.IsNullOrEmpty(find.Text)) return;
-            await Current.View.CoreWebView2.ExecuteScriptAsync("window.find(" + json.Serialize(find.Text) + ")");
+            try { await Current.View.CoreWebView2.ExecuteScriptAsync("window.find(" + json.Serialize(find.Text) + ")"); }
+            catch { status.Text = "Find is unavailable until this page finishes loading."; }
         }
 
         private void SelectApp(string section)
@@ -412,7 +418,7 @@ namespace SceneTrace
 
         private async Task<string> Post(string path, object value)
         {
-            var body = new StringContent(json.Serialize(value), System.Text.Encoding.UTF8, "application/json");
+            using (var body = new StringContent(json.Serialize(value), System.Text.Encoding.UTF8, "application/json"))
             using (var reply = await client.PostAsync(appOrigin + "/api/" + path, body))
             {
                 reply.EnsureSuccessStatusCode();

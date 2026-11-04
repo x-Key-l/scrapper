@@ -58,7 +58,7 @@ async function run() {
         console.log('Pokémon TV: alternate title, three publisher episodes, exact episode handoff, official embed exposed=' + Boolean(embed));
         await page.getByRole('button', {name: 'Close dialog'}).click();
 
-        await page.getByRole('button', {name: 'Universal Video Search', exact: true}).click();
+        await page.getByRole('button', {name: 'Quick Search', exact: true}).click();
         await page.locator('#watch-source').selectOption('open-animation');
         await page.getByRole('textbox', {name: 'Video search'}).fill('Caminandes');
         await page.getByRole('button', {name: 'Search', exact: true}).click();
@@ -109,7 +109,7 @@ async function run() {
         await page.screenshot({path: 'artifacts/website-test.png', fullPage: true});
         await page.getByRole('button', {name: 'Save website', exact: true}).click();
         await page.getByRole('heading', {name: 'W3Schools video example', exact: true}).waitFor();
-        await page.getByRole('button', {name: 'Universal Video Search', exact: true}).click();
+        await page.getByRole('button', {name: 'Quick Search', exact: true}).click();
         await page.locator('#watch-source').selectOption({label: 'W3Schools video example'});
         await page.getByRole('textbox', {name: 'Video search'}).fill('HTML Video');
         await page.getByRole('button', {name: 'Search', exact: true}).click();

@@ -19,8 +19,9 @@ from .open_catalog import title_key
 
 RESULT_LINKS = (
     'a[href*="/watch/"], a[href*="/video/"], a[href*="/episode/"], '
-    'a[href*="/series/"], a[href*="/anime/"], a[href*="/videos/watch/"]'
+    'a[href*="/series/"], a[href*="/anime/"], a[href*="/details/"], a[href*="/videos/watch/"]'
 )
+OLD_RESULT_LINKS = RESULT_LINKS.replace('a[href*="/details/"], ', '')
 FIELD_NAMES = (
     'strategy', 'search_pattern', 'query_param', 'page_param', 'items_path',
     'result_selector', 'title_selector', 'link_selector', 'thumbnail_selector',
@@ -28,6 +29,29 @@ FIELD_NAMES = (
     'episode_link_selector', 'playback_selector', 'path_prefix', 'render_browser',
 )
 _RENDER_SLOT = threading.BoundedSemaphore(1)
+
+class WebsiteSearchError(network.SourceError):
+    def __init__(self, code, message, diagnostics=None):
+        self.code = code
+        self.diagnostics = diagnostics or {}
+        super().__init__(message)
+
+
+def check_restriction(page):
+    heading = page.title.get_text(' ', strip=True).lower() if page.title else ''
+    if any(marker in heading for marker in ('just a moment', 'attention required', 'verify you are human', 'access denied')):
+        raise WebsiteSearchError('service_restriction',
+                                 'This website asks for a browser verification. Open it in Browser to continue manually.')
+
+
+def infer_selectors(page):
+    if page.select_one('.hk-tile .hk-tile__name a[href]'):
+        return dict(result_selector='.hk-tile', title_selector='.hk-tile__name',
+                    link_selector='.hk-tile__name a', thumbnail_selector='img', description_selector='.hk-tile__meta')
+    if page.select_one('.flw-item .film-name a[href]'):
+        return dict(result_selector='.flw-item', title_selector='.film-name',
+                    link_selector='.film-name a', thumbnail_selector='img', description_selector='.fd-infor')
+    return {}
 
 
 def parse_page(data):
@@ -81,7 +105,7 @@ def validate(config):
             if len(value) > 4096:
                 raise ValueError('A website configuration field is too long.')
             output[key] = value.strip()
-    if output['strategy'] not in ('html', 'listing', 'json', 'feed', 'sitemap'):
+    if output['strategy'] not in ('html', 'listing', 'json', 'feed', 'sitemap', 'browse'):
         raise ValueError('Choose a supported website strategy.')
     if output['strategy'] == 'html' and not (output['query_param'] or '{query}' in output['search_pattern']):
         raise ValueError('Enter the public search parameter or a URL pattern with {query}.')
@@ -134,11 +158,15 @@ def browser_html(value):
 
 def fetch_page(value, render=False):
     if render:
-        return parse_page(browser_html(value)), value
+        page = parse_page(browser_html(value))
+        check_restriction(page)
+        return page, value
     data, mime, final = network.fetch(value, limit=4 * 1024 * 1024)
     if not ('html' in mime or data.lstrip().startswith(b'<')):
         raise ValueError('This endpoint did not return a public HTML page.')
-    return parse_page(data), final
+    page = parse_page(data)
+    check_restriction(page)
+    return page, final
 
 
 def inspect(value):
@@ -156,6 +184,7 @@ def inspect(value):
     if re.search(br'<urlset\b', data[:800], re.I):
         return dict(result, strategy='sitemap', findings=['Public sitemap found. Use a video path prefix when it lists other pages.'])
     page = parse_page(data)
+    check_restriction(page)
     if page.title:
         result['name'] = text(page.title.get_text())[:100] or name
     if page.select_one('video[src], video source[src]'):
@@ -167,7 +196,10 @@ def inspect(value):
         action = relative(final, form.get('action') or final)
         if query and action and same_origin(final, action):
             result.update(strategy='html', search_pattern=action, query_param=query['name'],
-                          result_selector=RESULT_LINKS, findings=['Public GET search form found. Confirm the result selectors with a sample search.'])
+                          result_selector=RESULT_LINKS, findings=['A public search form is available. Testing will check actual result pages.'])
+            result.update(infer_selectors(page))
+            first_title = node_value(page, result.get('title_selector', 'main h3 a, main h2 a'))
+            result['query'] = first_title[:100] if first_title else ''
             return result
     for feed in page.select('link[rel=alternate][href]'):
         value = relative(final, feed.get('href'))
@@ -242,11 +274,15 @@ def search(source, query, page=1):
     from .sources import feed_rows, items_from
     cfg = source['web_config']
     strategy = cfg['strategy']
+    if strategy == 'browse':
+        raise WebsiteSearchError('browsing_only', 'This source is saved for browsing. Test a search method to include it in automated searches.')
     if page > 1 and not (cfg['page_param'] or '{page}' in cfg['search_pattern']):
         return [], False
     target = search_url(source, query, page)
     if strategy in ('html', 'listing'):
         doc, final = fetch_page(target, cfg['render_browser'])
+        if cfg['result_selector'] in ('', RESULT_LINKS, OLD_RESULT_LINKS) or cfg['result_selector'] == '.hk-tile':
+            cfg = dict(cfg, **infer_selectors(doc))
         raw_rows = []
         for node in select(doc, cfg['result_selector'] or RESULT_LINKS):
             href = node_value(node, cfg['link_selector'], ('href', 'src', 'data-href'))
@@ -259,6 +295,18 @@ def search(source, query, page=1):
                                  description=node_value(node, cfg['description_selector']) if cfg['description_selector'] else ''))
         raw_rows.extend(dict(title=v.get('name'), description=v.get('description'), url=v.get('url') or final,
                              thumbnail=v.get('thumbnailUrl')) for v in structured_videos(doc))
+        if not raw_rows and strategy == 'html':
+            for anchor in doc.select('main h2 a[href], main h3 a[href], article h2 a[href], article h3 a[href]'):
+                if not anchor.find_parent(['nav', 'header', 'footer']):
+                    raw_rows.append(dict(title=anchor.get_text(' ', strip=True), url=anchor.get('href')))
+        if not raw_rows and strategy == 'html':
+            visible = doc.get_text(' ', strip=True)
+            if not re.search(r'no (?:results|matches|anime|videos)|nothing found|0 results', visible, re.I):
+                code = 'javascript_required' if len(visible) < 180 and doc.select('script[src]') else 'result_structure'
+                raise WebsiteSearchError(code,
+                    'The search page opened, but its content could not be read. Browse the page or use Advanced configuration.',
+                    {'search_url': target, 'page_title': doc.title.get_text() if doc.title else '',
+                     'selector': cfg['result_selector'], 'visible_text_length': len(visible)})
     else:
         raw, _, final = network.fetch(target, limit=4 * 1024 * 1024)
         if strategy == 'feed':
@@ -299,11 +347,12 @@ def search(source, query, page=1):
 def episodes(source, value):
     from .viewing import episode_number, official_episode
     cfg = source['web_config']
-    if not cfg['episode_selector'] or not same_origin(value, source['endpoint']):
+    if not same_origin(value, source['endpoint']):
         return []
     doc, final = fetch_page(value, cfg['render_browser'])
     rows = {}
-    for node in select(doc, cfg['episode_selector']):
+    selector = cfg['episode_selector'] or 'a[href*="/episode/"], a[href*="?ep="], a[href*="/watch/"][data-number]'
+    for node in select(doc, selector):
         href = relative(final, node_value(node, cfg['episode_link_selector'], ('href', 'src', 'data-href')))
         name = node_value(node, cfg['episode_title_selector'])
         if href and name and (same_origin(final, href) or official_episode(href)):

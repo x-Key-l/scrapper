@@ -273,7 +273,7 @@ function websiteWizard(existing = null, website = '') {
         return;
     }
     dialog('Add Video Website',
-        '<p class="meta">1 Website → 2 Inspect → 3 Configure → 4 Test → 5 Save</p>' +
+        '<p class="meta">1 Website → 2 Inspect → 3 Test → 4 Save</p>' +
         '<p>Enter a public website, a video listing or a feed. SceneTrace will look for an available search method.</p>' +
         '<form data-site-form="inspect"><label for="website-url">Website URL</label><input id="website-url" name="url" type="url" required value="' +
         esc(website) + '" placeholder="https://example.org/videos"><div class="actions"><button class="primary">Inspect website</button>' +
@@ -283,7 +283,7 @@ function websiteWizard(existing = null, website = '') {
 function showWebsiteConfig(config) {
     const strategies = [
         ['html', 'Public search form or HTML results'], ['listing', 'HTML video listing'],
-        ['json', 'Public JSON search or listing'], ['feed', 'RSS, Atom or Media RSS'], ['sitemap', 'Video sitemap'],
+        ['browse', 'Browsing only'], ['json', 'Public JSON search or listing'], ['feed', 'RSS, Atom or Media RSS'], ['sitemap', 'Video sitemap'],
     ];
     const options = strategies.map(([key, label]) =>
         '<option value="' + key + '"' + (key === config.strategy ? ' selected' : '') + '>' + label + '</option>').join('');
@@ -294,7 +294,7 @@ function showWebsiteConfig(config) {
         '<div><label for="website-map-' + key + '">JSON ' + key + ' field</label><input id="website-map-' + key +
         '" name="map_' + key + '" placeholder="' + key + '" value="' + esc(config.mapping?.[key] || '') + '"></div>').join('');
     dialog(config.id ? 'Edit Video Website' : 'Configure Video Website',
-        '<p class="meta">3 Configure → 4 Test → 5 Save</p>' +
+        '<p class="meta">Review the detected settings and test a title. Advanced settings are optional.</p>' +
         (config.findings || []).map(finding => '<div class="notice">' + esc(finding) + '</div>').join('') +
         '<form data-site-form="test" data-id="' + esc(config.id || '') + '"><div class="form-grid">' +
         '<div><label for="website-name">Name</label><input id="website-name" name="name" required value="' + esc(config.name || '') + '"></div>' +
@@ -329,7 +329,7 @@ function showWebsiteTest(result) {
         '</ul><ul>' + result.results.map(row => '<li>' + external(row.url, row.title) + '</li>').join('') + '</ul>' +
         (direct ? '<video controls preload="none" class="episode-frame" src="' + esc(direct) + '"></video>' : '') +
         (sample ? '<p>' + external(sample.original, 'Open sample source page') + '</p>' : '') +
-        (result.save_ticket ? '<button type="button" class="primary" data-site="save" data-ticket="' +
+        (result.browse_ticket ? '<button type="button" data-site="save" data-ticket="' + esc(result.browse_ticket) + '">Save for browsing</button>' : '') + (result.save_ticket ? '<button type="button" class="primary" data-site="save" data-ticket="' +
             esc(result.save_ticket) + '">Save website</button>' : '');
 }
 

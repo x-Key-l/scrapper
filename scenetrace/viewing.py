@@ -312,7 +312,9 @@ class Viewing:
         except (OSError, ValueError) as error:
             message = str(error) if isinstance(error, ValueError) else 'The website did not complete the request.'
             checks['error'] = message
-            return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': message}
+            return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': message,
+                    'error_code': getattr(error, 'code', 'connection_error'),
+                    'diagnostics': getattr(error, 'diagnostics', {})}
 
     def test_website(self, body):
         previous = self.app.store.source(body.get('id'))
@@ -331,6 +333,10 @@ class Viewing:
         if result['ok']:
             config['video_checks'] = result['checks']
             result['save_ticket'] = self.ticket('website-config', config)
+        else:
+            browsing = dict(config, web_config=dict(config['web_config'], strategy='browse'),
+                            video_checks={'search': 'Integration incomplete', 'playback': 'Manual browsing available'})
+            result['browse_ticket'] = self.ticket('website-config', browsing)
         return result
 
     def save_website(self, ticket):

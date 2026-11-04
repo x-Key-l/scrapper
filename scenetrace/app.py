@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import platform
+import secrets
 import shutil
 import threading
 import time
@@ -14,6 +15,7 @@ from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
 from .viewing import Viewing
 from .search import SearchEngine
+from .sessions import SearchSessions
 from .store import Store, protect
 
 log = logging.getLogger('scenetrace')
@@ -25,9 +27,13 @@ class App:
         sources.defaults(self.store)
         self.proxy = proxy
         self.search = SearchEngine(self.store)
+        self.search_sessions = SearchSessions(self)
         self.downloads = DownloadManager(self.store, proxy)
         self.analyses = {}
         self.viewing = Viewing(self)
+        self.desktop_token = secrets.token_urlsafe(32)
+        self.native_browser = False
+        self.browser_process = None
         self.uploads = {}
         self.tasks = {}
         self.task_lock = threading.Lock()
@@ -39,8 +45,13 @@ class App:
     def state(self):
         return dict(version=__version__, sources=self.store.sources(public=True), saved=self.store.saved(),
                     history=self.store.history(), downloads=self.downloads.all(), tasks={k:dict(v) for k,v in list(self.tasks.items())},
+                    bookmarks=self.store.bookmarks(),
                     settings={'destination':self.store.setting('destination',str(self.folder)), 'onboarded':self.store.setting('onboarded',False),
-                              'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path())})
+                              'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path()),
+                              'native_browser':self.native_browser,
+                              'record_history':self.store.setting('record_history', True),
+                              'record_browsing':self.store.setting('record_browsing', True),
+                              'history_retention_days':self.store.setting('history_retention_days', 0)})
 
     def task(self, label, fn):
         ident = uuid.uuid4().hex
@@ -203,6 +214,17 @@ class App:
         return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
 
     def settings(self, body):
+        for key in ('record_history', 'record_browsing'):
+            if key in body:
+                if not isinstance(body[key], bool):
+                    raise ValueError('History recording must be enabled or disabled.')
+                self.store.set_setting(key, body[key])
+        if 'history_retention_days' in body:
+            days = body['history_retention_days']
+            if type(days) is not int or days < 0:
+                raise ValueError('Enter a whole number of days. Zero keeps history until you delete it.')
+            self.store.set_setting('history_retention_days', days)
+            self.store.history()
         if 'destination' in body:
             path=Path(body['destination']).expanduser().resolve()
             if not path.is_dir():
@@ -215,8 +237,7 @@ class App:
         if 'onboarded' in body:
             self.store.set_setting('onboarded',bool(body['onboarded']))
         if body.get('clear_history'):
-            with self.store.db() as c:
-                c.execute('DELETE FROM history')
+            self.store.delete_history(clear=True)
         if body.get('clear_cache'):
             with self.store.db() as c:
                 c.execute('DELETE FROM cache')
@@ -274,6 +295,29 @@ class App:
 
     def call(self, path, body):
         if path=='/api/state': return self.state()
+        if path=='/api/deep/start': return self.search_sessions.start(body)
+        if path=='/api/deep/poll': return self.search_sessions.poll(body.get('id'))
+        if path=='/api/deep/cancel': return self.search_sessions.cancel(body.get('id'))
+        if path=='/api/desktop/event':
+            if body.get('action') == 'ready':
+                self.native_browser = True
+                return {'ok': True}
+            if body.get('action') == 'navigation':
+                self.store.navigation(body.get('url'), body.get('title', ''))
+                from .websites import same_origin
+                for source in self.store.sources():
+                    if source.get('endpoint') and same_origin(body.get('url', ''), source['endpoint']):
+                        checks = dict(source.get('video_checks') or {}, browsing='Browsing verified')
+                        source.update(video_checks=checks)
+                        self.store.put_source(source)
+                return {'ok': True}
+            raise ValueError('Unknown browser event.')
+        if path=='/api/history/list': return self.store.history_page(body.get('query', ''), body.get('offset', 0))
+        if path=='/api/history/delete': return self.store.delete_history(body.get('ids'), body.get('clear') is True)
+        if path=='/api/history/undo': return self.store.restore_history(body.get('token'))
+        if path=='/api/browser/history': return {'entries': self.store.navigation()}
+        if path=='/api/browser/bookmark':
+            return {'bookmarks': self.store.bookmarks(body.get('url'), body.get('title', ''), body.get('remove') is True)}
         if path=='/api/watch/search': return self.viewing.search(body)
         if path=='/api/watch/details':
             item = body.get('record')
@@ -328,6 +372,9 @@ class App:
 
     def close(self):
         self.downloads.close()
+        self.search_sessions.close()
         self.search.close()
+        if self.browser_process and self.browser_process.poll() is None:
+            self.browser_process.terminate()
         for u in self.uploads.values():
             Path(u['path']).unlink(missing_ok=True)

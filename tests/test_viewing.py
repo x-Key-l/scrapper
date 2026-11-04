@@ -156,4 +156,7 @@ def test_video_gallery_upgrade_preserves_existing_profile(tmp_path):
     assert store.setting('destination') == 'existing-folder'
     assert store.saved()[0]['id'] == 'saved:previous-release'
     assert store.history()[0]['query'] == 'existing search'
-    assert {source['id'] for source in store.sources()} == {'open-animation', 'pokemon-tv'}
+    assert {source['id'] for source in store.sources()} == {'open-animation', 'pokemon-tv', 'itunes'}
+    store.delete_source('itunes')
+    defaults(store)
+    assert store.source('itunes') is None

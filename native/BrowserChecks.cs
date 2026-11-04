@@ -65,8 +65,6 @@ namespace SceneTrace
                     throw new InvalidOperationException("External website bridge was enabled.");
                 string bridge = await tab.View.CoreWebView2.ExecuteScriptAsync("(()=>{try{window.chrome.webview.postMessage({action:'open',url:'file:///C:/'});return false}catch(e){return true}})()");
                 if (bridge != "true") throw new InvalidOperationException("Website posted a native message.");
-                string isolated = await tab.View.CoreWebView2.ExecuteScriptAsync(
-                    "fetch(" + json.Serialize(appOrigin + "/api/state") + ",{method:'POST',headers:{'Content-Type':'application/json','X-SceneTrace':'local'},body:'{}'}).then(r=>r.ok?'leaked':'blocked').catch(()=> 'blocked')");
                 // ExecuteScriptAsync does not unwrap promises. Record the asynchronous result in a test-page variable.
                 await tab.View.CoreWebView2.ExecuteScriptAsync(
                     "window.isolationResult='pending';fetch(" + json.Serialize(appOrigin + "/api/state") +

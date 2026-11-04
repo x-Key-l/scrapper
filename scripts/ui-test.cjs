@@ -28,18 +28,18 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await page.locator('#map-title').waitFor();
   await page.getByRole('button',{name:'Import and index →'}).click();
   await page.getByText('Import ui-catalog.csv · Finished',{exact:false}).waitFor({timeout:15000});
-  await page.getByRole('button',{name:'Memory Search',exact:true}).click();
+  await page.getByRole('button',{name:'Deep Search',exact:true}).click();
   await page.getByRole('textbox',{name:'Describe the video you remember'}).fill('girl mysterious forest portal');
-  const chips=page.locator('[data-source]');
+  const chips=page.locator('[data-deep-source]');
   for(let i=0;i<await chips.count();i++){
    const label=await chips.nth(i).locator('..').textContent();
    if(!label.includes('ui-catalog'))await chips.nth(i).uncheck();
   }
-  await page.getByRole('button',{name:'Follow the clues →'}).click();
+  await page.getByRole('button',{name:'Search deeply'}).click();
   await page.getByRole('heading',{name:'Forest Portal',exact:true}).waitFor({timeout:15000});
-  await page.getByRole('button',{name:'Details',exact:true}).first().click();
+  await page.getByRole('button',{name:'Find viewing options',exact:true}).first().click();
   await page.getByRole('dialog').getByRole('heading',{name:'Forest Portal',exact:true}).waitFor();
-  await page.getByRole('button',{name:'+ Save record',exact:true}).click();
+  await page.getByRole('button',{name:'Save title',exact:true}).click();
   await page.getByRole('button',{name:'Close dialog'}).click();
   await page.getByRole('button',{name:'Saved Library',exact:true}).click();
   await page.getByRole('heading',{name:'Forest Portal',exact:true}).waitFor();
@@ -77,7 +77,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await page.getByRole('button',{name:'Video Sources',exact:true}).click();
   await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.locator('#page .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})}).waitFor();
-  for(const label of ['Anime','Universal Video Search','Video Sources','Link Analyzer','Downloads','Settings','Home']){
+  for(const label of ['Anime','Quick Search','Video Sources','Link Analyzer','Downloads','Settings','Home']){
    await page.getByRole('button',{name:label,exact:true}).first().click();
    assert(await page.locator('h1').count()>0);
   }

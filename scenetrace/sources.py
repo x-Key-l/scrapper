@@ -12,6 +12,9 @@ from . import network
 from .model import record, text, field, flatten, url
 
 GALLERY = [
+    dict(id='itunes', name='Apple movie catalog', kind='itunes', role='metadata', categories=['movie'],
+         description='Movie titles, descriptions and actor-search matches from Apple’s public catalog. Store listings are metadata, not included films.',
+         website='https://tv.apple.com', docs='https://performance-partners.apple.com/search-api', endpoint='https://itunes.apple.com', auth='None'),
     dict(id='pokemon-tv', name='Pokémon TV', kind='pokemon-tv', role='media', categories=['anime'],
          description='Official English Indigo League episode pages. Starter selection of episodes 1–3.',
          website='https://www.youtube.com/@OfficialPokemonTV', endpoint='https://www.youtube.com', auth='None'),
@@ -43,9 +46,11 @@ def defaults(store):
     existing = {s['id'] for s in store.sources()}
     initialized = store.setting('gallery_initialized', False)
     video_initialized = store.setting('video_gallery_initialized', False)
+    deep_initialized = store.setting('deep_gallery_initialized', False)
     for source in GALLERY:
         fresh = not initialized or (
             not video_initialized and source['kind'] in ('pokemon-tv', 'open-animation')
+        ) or (not deep_initialized and source['kind'] == 'itunes'
         )
         if fresh and source['id'] not in existing:
             health = 'Optional key needed' if source['id'] == 'tmdb' else 'Untested'
@@ -54,6 +59,8 @@ def defaults(store):
         store.set_setting('gallery_initialized', True)
     if not video_initialized:
         store.set_setting('video_gallery_initialized', True)
+    if not deep_initialized:
+        store.set_setting('deep_gallery_initialized', True)
 
 
 def validate(config, previous=None):
@@ -186,14 +193,21 @@ _last_request = {}
 
 def search(source, query, page=1, memory=None):
     """One bounded page. Provider requests are paced independently, including across searches."""
+    if source['kind'] in ('local', 'pokemon-tv', 'open-animation'):
+        return _search(source, query, page, memory)
+    return paced(source, lambda: _search(source, query, page, memory))
+
+
+def paced(source, operation):
     with _lock_guard:
         lock = _locks.setdefault(source['id'], threading.Lock())
     with lock:
-        delay = (2.1 if source['kind'] == 'anilist' else .6) - (time.monotonic() - _last_request.get(source['id'], 0))
+        interval = {'anilist': 2.1, 'itunes': 3.1}.get(source['kind'], .6)
+        delay = interval - (time.monotonic() - _last_request.get(source['id'], 0))
         if delay > 0:
             time.sleep(delay)
         _last_request[source['id']] = time.monotonic()
-        return _search(source, query, page, memory)
+        return operation()
 
 
 def _search(s, q, page, memory=None):
@@ -211,6 +225,9 @@ def _search(s, q, page, memory=None):
     if kind in ('pokemon-tv', 'open-animation'):
         from .open_catalog import search as search_open_catalog
         return search_open_catalog(s, q, page)
+    if kind == 'itunes':
+        from .deep_sources import apple_movies
+        return apple_movies(s, q), False
     if kind == 'tvmaze':
         if page > 1:
             return [], False
