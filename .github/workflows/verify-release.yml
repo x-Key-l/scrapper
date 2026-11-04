@@ -33,6 +33,23 @@ jobs:
       - name: Smoke the actual packaged executable
         if: runner.os == 'Windows'
         run: python scripts/smoke.py --exe dist/SceneTrace/SceneTrace.exe
+      - name: Complete a public episode download using the packaged executable
+        if: runner.os == 'Windows'
+        run: python scripts/live_video_check.py --exe dist/SceneTrace/SceneTrace.exe
+      - uses: actions/setup-node@v4
+        if: runner.os == 'Windows'
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+        if: runner.os == 'Windows'
+      - run: npx playwright install chromium --only-shell
+        if: runner.os == 'Windows'
+      - name: Play a real episode in the packaged Windows application
+        if: runner.os == 'Windows'
+        env:
+          SCENETRACE_QA_EXE: dist/SceneTrace/SceneTrace.exe
+        run: node scripts/video-e2e.cjs
       - name: Stage Windows ZIP and notices
         if: runner.os == 'Windows'
         run: python scripts/package_release.py
@@ -44,6 +61,13 @@ jobs:
           path: |
             test-results.xml
             live-results.json
+            watch-results.json
+      - name: Upload Windows search and playback screenshots
+        if: runner.os == 'Windows' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-watch-qa
+          path: artifacts/
       - name: Upload Windows package
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
@@ -67,6 +91,8 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: npm ci
       - run: npx playwright install chromium --with-deps --only-shell
+      - name: Verify real search-to-watch workflows
+        run: node scripts/video-e2e.cjs
       - name: Exercise the real browser application
         run: npm run test:ui
       - uses: actions/upload-artifact@v4
@@ -86,10 +112,14 @@ jobs:
         with:
           name: SceneTrace-Windows-x64
           path: package
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-watch-qa
+          path: screens
       - name: Publish verified Windows prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag="v2.0.0-rc.$GITHUB_RUN_NUMBER"
-          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 --target "$GITHUB_SHA" --title "SceneTrace 2.0 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md
+          tag="v3.0.0-rc.$GITHUB_RUN_NUMBER"
+          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 screens/anime-search.png screens/caminandes-playing.png screens/added-website-playing.png --target "$GITHUB_SHA" --title "SceneTrace 3.0 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md

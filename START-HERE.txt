@@ -1,26 +1,16 @@
-SCENETRACE - WINDOWS 10/11 x64
+SceneTrace 3.0 for Windows x64
 
 1. Right-click the ZIP and choose Extract All.
 2. Open the extracted SceneTrace folder.
-3. Double-click SceneTrace.exe.
-4. Your browser opens automatically. No commands or installations are needed.
+3. Double-click SceneTrace.exe. Keep _internal beside it.
 
-Keep SceneTrace.exe and the _internal folder together.
+Try Anime and search Pocket Monsters for official Pokémon TV episodes.
+Try Universal Video Search and search Caminandes for an in-app video.
+Use Video Sources > Add Video Website to connect another public site.
+Use Memory Search when you remember scenes or plot details.
 
-Universal Search: search connected catalogs together.
-Memory Search: describe a forgotten video.
-Database Hub: test, configure, connect or import databases.
-Link Analyzer: inspect a public video link and its available formats.
-Download Center: follow authorized transfers and open completed files.
+Settings > Test Archive HTTPS checks Internet Archive on your PC.
+Choose Quit SceneTrace before replacing or upgrading the portable folder.
+Your profile stays in %LOCALAPPDATA%\SceneTrace.
 
-Double-click the executable again to reopen a running session.
-Choose Quit SceneTrace in the sidebar to stop it.
-Closing only the browser tab leaves the app and downloads running.
-
-If startup fails, extract the whole ZIP again to a writable folder.
-Check whether antivirus quarantined required runtime files.
-Open Settings and export diagnostics if the interface opens.
-Personal settings: %LOCALAPPDATA%\SceneTrace
-
-See README.md and docs/HELP.md.
-The first package is a release candidate pending owner acceptance.
+See docs/HELP.md for the step-by-step guide.

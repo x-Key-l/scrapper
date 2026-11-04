@@ -33,6 +33,11 @@ def fixture_server(fixture_video):
         def do_GET(self):self.respond(True)
         def respond(self,body):
             received.append(dict(self.headers))
+            if self.path == '/throttled.mp4' and len(received) == 1:
+                self.send_response(429)
+                self.send_header('Retry-After', '1')
+                self.end_headers()
+                return
             offset=int(self.headers.get('Range','bytes=0-').split('=')[1].split('-')[0])
             partial='Range' in self.headers
             self.send_response(206 if partial else 200)
@@ -71,11 +76,14 @@ def wait(manager,key):
     raise AssertionError('Fixture transfer timed out')
 
 
-@pytest.mark.parametrize('output',['original','mp4','mp3'])
-def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixture_video,output):
+@pytest.mark.parametrize('output,throttled',[('original',False),('mp4',False),('mp3',False),('original',True)])
+def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixture_video,output,throttled):
     value,received=fixture_server
+    if throttled:
+        value = value.replace('/sample.mp4', '/throttled.mp4')
     manager=DownloadManager(Store(tmp_path/'state'),'proxy',workers=1)
     try:
+        start = time.monotonic()
         job=manager.add({'title':'Fixture','url':value},{'id':'0','ext':'mp4','method':'direct','url':value,'size':len(fixture_video)},str(tmp_path),True,output)
         done=wait(manager,job['id'])
         path=Path(done['path'])
@@ -84,6 +92,8 @@ def test_http_download_and_real_ffmpeg_processing(tmp_path,fixture_server,fixtur
         check=subprocess.run([media.ffmpeg_path(),'-v','error','-i',str(path),'-f','null','-'],capture_output=True)
         assert check.returncode==0,check.stderr
         assert received
+        if throttled:
+            assert len(received) == 2 and time.monotonic() - start >= 1
     finally:manager.close()
 
 
@@ -102,3 +112,60 @@ def test_yt_dlp_worker_uses_validating_proxy_and_downloads_reported_format(tmp_p
     finally:
         if manager:manager.close()
         proxy.shutdown();proxy.server_close()
+
+
+def test_yt_dlp_merges_separate_authorized_http_tracks(tmp_path, fixture_video, monkeypatch):
+    """Supply a deterministic extractor manifest and exercise real transfers and FFmpeg."""
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler
+    import yt_dlp
+
+    original = tmp_path / 'input.mp4'
+    original.write_bytes(fixture_video)
+    ffmpeg = media.ffmpeg_path()
+    for selector, name in [('0:v:0', 'video.mp4'), ('0:a:0', 'audio.m4a')]:
+        subprocess.run([ffmpeg, '-v', 'error', '-i', str(original), '-map', selector,
+                        '-c', 'copy', str(tmp_path / name)], check=True)
+
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    host = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(tmp_path)))
+    threading.Thread(target=host.serve_forever, daemon=True).start()
+    proxy = network.start_proxy()
+    target = network.target
+    def resolve(value):
+        parsed = urlsplit(value)
+        if parsed.hostname == 'tracks.example':
+            return parsed, parsed.hostname, host.server_port, '127.0.0.1'
+        return target(value)
+
+    def extract(self, value, download=True, **kwargs):
+        return self.process_ie_result({
+            'id': 'fixture', 'title': 'Authorized two-track video',
+            'extractor': 'fixture', 'webpage_url': value,
+            'formats': [
+                {'format_id': 'video1', 'url': 'http://tracks.example/video.mp4', 'ext': 'mp4',
+                 'protocol': 'http', 'vcodec': 'h264', 'acodec': 'none', 'height': 64},
+                {'format_id': 'audio1', 'url': 'http://tracks.example/audio.m4a', 'ext': 'm4a',
+                 'protocol': 'http', 'vcodec': 'none', 'acodec': 'aac'},
+            ],
+        }, download=download)
+
+    monkeypatch.setattr(network, 'target', resolve)
+    monkeypatch.setattr(yt_dlp.YoutubeDL, 'extract_info', extract)
+    output = tmp_path / 'combined.mkv'
+    request = {'url': 'http://tracks.example/player', 'proxy': 'http://127.0.0.1:' + str(proxy.server_port)}
+    try:
+        formats = media.worker(request)['formats']
+        pair = next(item for item in formats if item['id'] == 'video1+audio1')
+        assert pair['ext'] == 'mkv' and pair['audio'] and pair['video']
+        assert media.worker(dict(request, download=True, format_id=pair['id'], output=str(output)))['complete']
+        subprocess.run([ffmpeg, '-v', 'error', '-i', str(output), '-map', '0:v:0', '-map', '0:a:0',
+                        '-f', 'null', '-'], capture_output=True, check=True, timeout=15)
+    finally:
+        host.shutdown()
+        host.server_close()
+        proxy.shutdown()
+        proxy.server_close()

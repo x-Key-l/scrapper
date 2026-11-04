@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 import imageio_ffmpeg
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scenetrace import __version__
 
 stage=Path('release')/'SceneTrace'
 if stage.exists():shutil.rmtree(stage)
@@ -17,7 +19,7 @@ for name in ('README.md','START-HERE.txt','THIRD-PARTY-NOTICES.md'):
 shutil.copytree('docs',stage/'docs',dirs_exist_ok=True)
 licenses=stage/'licenses'
 licenses.mkdir(exist_ok=True)
-for name in ('yt-dlp','imageio-ffmpeg','pyinstaller'):
+for name in ('yt-dlp','imageio-ffmpeg','pyinstaller','beautifulsoup4','soupsieve','truststore'):
     d=importlib.metadata.distribution(name)
     for p in d.files:
         if 'LICENSE' in str(p).upper() or Path(str(p)).name.upper().startswith('COPYING'):
@@ -26,8 +28,10 @@ for name in ('yt-dlp','imageio-ffmpeg','pyinstaller'):
                 shutil.copyfile(source,licenses/(name+'-'+source.name))
 ffmpeg=subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-L'],capture_output=True,text=True)
 (licenses/'FFmpeg-build-and-license.txt').write_text(ffmpeg.stdout+ffmpeg.stderr,encoding='utf-8')
-if Path('live-results.json').exists():shutil.copyfile('live-results.json',stage/'docs'/'live-results.json')
-(stage/'docs'/'BUILD.json').write_text(json.dumps({'version':'2.0.0','commit':os.environ.get('GITHUB_SHA','local'),
+for name in ('live-results.json', 'watch-results.json'):
+    if Path(name).exists():
+        shutil.copyfile(name, stage/'docs'/name)
+(stage/'docs'/'BUILD.json').write_text(json.dumps({'version':__version__,'commit':os.environ.get('GITHUB_SHA','local'),
     'python':sys.version,'os':sys.platform,'yt_dlp':importlib.metadata.version('yt-dlp'),
     'imageio_ffmpeg':importlib.metadata.version('imageio-ffmpeg'),'verification':'Source tests and packaged executable HTTP smoke test precede packaging in CI.'},indent=2),encoding='utf-8')
 archive=shutil.make_archive('SceneTrace-Windows-x64','zip','release','SceneTrace')

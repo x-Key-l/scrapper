@@ -19,8 +19,9 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(address);
   await page.getByRole('button',{name:'Start discovering →'}).click();
-  await page.getByRole('heading',{name:/Every video leaves/}).waitFor();
-  await page.getByRole('button',{name:'Database Hub',exact:true}).click();
+  await page.getByRole('heading',{name:/Find a video/}).waitFor();
+  await page.getByRole('button',{name:'Video Sources',exact:true}).click();
+  await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.getByRole('heading',{name:'More sources. More possibilities.'}).waitFor();
   await page.getByRole('button',{name:'Import database',exact:true}).click();
   await page.locator('#import-file').setInputFiles({name:'ui-catalog.csv',mimeType:'text/csv',buffer:Buffer.from('id,title,description,year,category\n1,Forest Portal,A girl discovers a mysterious portal in the forest,1994,anime\n2,Motor Road,Fast cars on a highway,2010,movie\n')});
@@ -46,7 +47,8 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   assert.equal(await page.locator('#saved-results .card').count(),0);
   await page.getByRole('textbox',{name:'Filter saved library'}).fill('');
   // Previewing a nested JSON export must preserve its selected records path and metadata.
-  await page.getByRole('button',{name:'Database Hub',exact:true}).click();
+  await page.getByRole('button',{name:'Video Sources',exact:true}).click();
+  await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.getByRole('button',{name:'Import database',exact:true}).click();
   await page.locator('#import-file').setInputFiles({name:'nested.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({payload:{items:[{id:9,title:'Deep Archive',description:'An archival video'}]}}))});
   await page.locator('#import-name').waitFor();
@@ -72,9 +74,10 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   const discovered=page.locator('#discovered .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})});
   await discovered.getByRole('button',{name:'Enable connector',exact:true}).click();
   await page.getByRole('button',{name:'Close dialog'}).click();
-  await page.getByRole('button',{name:'Database Hub',exact:true}).click();
+  await page.getByRole('button',{name:'Video Sources',exact:true}).click();
+  await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.locator('#page .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})}).waitFor();
-  for(const label of ['Universal Search','Link Analyzer','Download Center','Settings','Home']){
+  for(const label of ['Anime','Universal Video Search','Video Sources','Link Analyzer','Downloads','Settings','Home']){
    await page.getByRole('button',{name:label,exact:true}).first().click();
    assert(await page.locator('h1').count()>0);
   }

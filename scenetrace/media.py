@@ -32,7 +32,7 @@ def worker(request):
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
                 cachedir=False, age_limit=0, plugin_dirs=[], js_runtimes={},
-                remote_components=set(), playlistend=1, allowed_extractors=['default'],
+                remote_components=set(), compat_opts={'no-certifi'}, playlistend=1, allowed_extractors=['default'],
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True)
     if request.get('download'):
         def hook(data):
@@ -40,8 +40,11 @@ def worker(request):
             out = {k:data.get(k) for k in ('status','downloaded_bytes','total_bytes','total_bytes_estimate','speed','eta')}
             print(json.dumps(out), flush=True)
         fmt = str(request['format_id'])
-        if not re.fullmatch(r'[\w.-]+', fmt):
+        format_ids = fmt.split('+')
+        if len(format_ids) not in (1, 2) or any(not re.fullmatch(r'[\w.-]+', part) for part in format_ids):
             raise ValueError('Invalid format ID')
+        if len(format_ids) == 2:
+            opts['merge_output_format'] = 'mkv'
         opts.update(format=fmt, outtmpl=request['output'], continuedl=True, nopart=False,
                     progress_hooks=[hook], overwrites=False,
                     postprocessor_args={'ffmpeg_i':['-protocol_whitelist','file,pipe']})
@@ -52,9 +55,15 @@ def worker(request):
         if (info.get('age_limit') or 0) > 0 or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'):
             raise ValueError('The source requires restricted access. Use its official viewing page.')
         if request.get('download'):
-            selected = next((x for x in info.get('formats', []) if str(x.get('format_id')) == fmt), None)
-            if not selected or selected.get('has_drm') or selected.get('protocol') not in ('http','https'):
+            by_id = {str(item.get('format_id')): item for item in info.get('formats', [])}
+            tracks = [by_id.get(part) for part in format_ids]
+            if any(not track or track.get('has_drm') or track.get('protocol') not in ('http', 'https') for track in tracks):
                 raise ValueError('This format is no longer a supported public direct media format.')
+            if len(tracks) == 2 and not (
+                tracks[0].get('vcodec') not in (None, 'none') and tracks[0].get('acodec') == 'none'
+                and tracks[1].get('vcodec') == 'none' and tracks[1].get('acodec') not in (None, 'none')
+            ):
+                raise ValueError('The selected video and audio tracks no longer match.')
             ydl.download([request['url']])
             return {'complete':True}
         formats = []
@@ -68,6 +77,15 @@ def worker(request):
                                 label=x.get('format_note') or x.get('format') or x['ext'],
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
                                 method='extractor'))
+        audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
+        if audio and ffmpeg_path():
+            combinations = []
+            for f in formats:
+                if f['video'] and not f['audio']:
+                    size = f['size'] + audio['size'] if f['size'] and audio['size'] else None
+                    combinations.append(dict(f, id=f['id'] + '+' + audio['id'], ext='mkv', size=size,
+                                             label=f['label'] + ' with audio', audio=True))
+            formats = combinations + formats
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
@@ -98,7 +116,7 @@ def analyze(value, proxy):
                                     label=name, url='https://archive.org/download/'+quote(ident)+'/'+quote(name, safe=''), method='direct'))
         info = dict(title=text(meta.get('title')), description=text(meta.get('description')), creators=[text(meta.get('creator'))],
                     thumbnail='https://archive.org/services/img/'+quote(ident), license=text(meta.get('licenseurl')), formats=formats)
-    elif p.hostname == 'commons.wikimedia.org' and p.path.startswith('/wiki/File:'):
+    elif p.hostname == 'commons.wikimedia.org' and unquote(p.path).startswith('/wiki/File:'):
         title = unquote(p.path.removeprefix('/wiki/'))
         raw = network.json_request('https://commons.wikimedia.org/w/api.php?'+urlencode({'action':'query','format':'json','titles':title,'prop':'videoinfo','viprop':'url|size|extmetadata|derivatives','viurlwidth':640}))
         page = next(iter(raw.get('query',{}).get('pages',{}).values()), {})

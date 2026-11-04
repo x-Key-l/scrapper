@@ -10,8 +10,9 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from . import __version__, discovery, importing, media, sources
+from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
+from .viewing import Viewing
 from .search import SearchEngine
 from .store import Store, protect
 
@@ -26,6 +27,7 @@ class App:
         self.search = SearchEngine(self.store)
         self.downloads = DownloadManager(self.store, proxy)
         self.analyses = {}
+        self.viewing = Viewing(self)
         self.uploads = {}
         self.tasks = {}
         self.task_lock = threading.Lock()
@@ -79,6 +81,8 @@ class App:
 
     def test_source(self, ident):
         s = self.source(ident)
+        if s['kind'] == 'tmdb' and not s.get('token'):
+            return {'ok':False,'message':'TMDB is an optional metadata catalog. Add an API Read Access Token in Configure to enable it.'}
         def save_health():
             current = self.store.source(ident)
             if current:
@@ -161,7 +165,9 @@ class App:
         return self.task('Import '+c['name'],work)
 
     def analyze(self, value):
-        result=media.analyze(value,self.proxy)
+        return self.register_analysis(media.analyze(value,self.proxy))
+
+    def register_analysis(self, result):
         key=uuid.uuid4().hex
         self.analyses[key]=result
         for old,v in list(self.analyses.items()):
@@ -268,6 +274,21 @@ class App:
 
     def call(self, path, body):
         if path=='/api/state': return self.state()
+        if path=='/api/watch/search': return self.viewing.search(body)
+        if path=='/api/watch/details':
+            item = body.get('record')
+            if not isinstance(item, dict) or not item.get('title'):
+                raise ValueError('Select a title first.')
+            return self.viewing.details(item)
+        if path=='/api/watch/play': return self.viewing.play(body.get('ticket', ''))
+        if path=='/api/watch/inspect':
+            from .websites import inspect
+            return inspect(body.get('url', ''))
+        if path=='/api/watch/test-website': return self.viewing.test_website(body)
+        if path=='/api/watch/save-website': return self.viewing.save_website(body.get('ticket', ''))
+        if path=='/api/watch/test-source': return self.viewing.test_source(body.get('id'), body.get('query', ''))
+        if path=='/api/network/tls': return network.tls_diagnostics('https://archive.org/metadata/BigBuckBunny_328')
+
         if path=='/api/search':
             hints=body.get('hints') or {}
             query=body.get('query','')
@@ -290,7 +311,7 @@ class App:
         if path=='/api/discover':
             key=self.store.setting('brave_key','')
             if key.startswith('dpapi:'): key=protect(key,True)
-            return discovery.find(str(body.get('query','')),key)
+            return discovery.find(str(body.get('query','')),key,video_only=body.get('video_only') is True)
         if path=='/api/analyze': return self.analyze(body.get('url',''))
         if path=='/api/resolve': return self.resolve(body.get('record'))
         if path=='/api/download/add': return self.download(body)

@@ -91,7 +91,7 @@ def test_runtime_source_toggle_and_missing_credentials_are_honest(server):
     assert server.app.source_update(s)['source']['enabled']
     result=server.app.test_source('tmdb')
     assert not result['ok'] and 'Token' in result['message']
-    assert server.app.store.source('tmdb')['health']=='Unavailable'
+    assert server.app.store.source('tmdb')['health']=='Optional key needed'
 
 
 def test_source_failure_not_global_server_failure(server):

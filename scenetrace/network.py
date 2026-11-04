@@ -5,9 +5,15 @@ import json
 import select
 import socket
 import ssl
+import sys
 import threading
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
+
+USER_AGENT = 'SceneTrace/3.0 (desktop video discovery)'
+WIKIMEDIA_USER_AGENT = 'SceneTrace/3.0 (desktop video discovery; https://github.com/x-Key-l)'
 
 
 class SourceError(ValueError):
@@ -16,6 +22,50 @@ class SourceError(ValueError):
 
 class UnsafeURL(SourceError):
     pass
+
+
+class RateLimitError(SourceError):
+    def __init__(self, value):
+        value = (value or '60')[:80].strip()
+        try:
+            self.delay = int(value)
+        except ValueError:
+            try:
+                retry = parsedate_to_datetime(value).astimezone(timezone.utc)
+                self.delay = round((retry - datetime.now(timezone.utc)).total_seconds())
+            except (ValueError, TypeError, OverflowError):
+                self.delay = 60
+        self.delay = max(1, self.delay)
+        super().__init__(f'Provider rate limit reached. Retry after {self.delay} seconds.')
+
+
+class TrustError(SourceError):
+    def __init__(self, error):
+        self.code = getattr(error, 'verify_code', None)
+        reason = 'The server certificate could not be verified'
+        if self.code in (18, 19, 20, 21):
+            reason = 'The certificate chain is not trusted on this PC'
+        super().__init__(reason + '. Check the Windows date and try the source in Edge. '
+                         'If a managed proxy or antivirus inspects HTTPS, ask its administrator to check its trusted issuer.')
+
+
+def tls_context():
+    if sys.platform == 'win32':
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return ssl.create_default_context()
+
+
+def tls_diagnostics(value):
+    try:
+        conn, _, _ = open_url(value, method='HEAD')
+        conn.close()
+        return {'status': 'Verified HTTPS request', 'verify_code': None}
+    except TrustError as error:
+        return {'status': 'Certificate rejected', 'verify_code': error.code, 'message': str(error)}
+    except (OSError, ValueError) as error:
+        return {'status': 'Connection failed', 'message': str(error) if isinstance(error, ValueError) else 'The host did not complete a request.'}
+
 
 
 def target(url):
@@ -33,19 +83,24 @@ def target(url):
         if not ips or any(not ipaddress.ip_address(ip).is_global for ip in ips):
             raise UnsafeURL('Private, reserved, and mixed DNS addresses are blocked.')
         return p, host, port, ips[0]
+    except UnsafeURL:
+        raise
     except (ValueError, UnicodeError, socket.gaierror) as e:
         raise UnsafeURL('The public hostname could not be safely resolved.') from e
 
 
 class PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, host, port, ip, timeout):
-        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        super().__init__(host, port, timeout=timeout, context=tls_context())
         self.ip = ip
 
     def connect(self):
         sock = socket.create_connection((self.ip, self.port), self.timeout)
         try:
             self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        except ssl.SSLCertVerificationError as error:
+            sock.close()
+            raise TrustError(error) from error
         except BaseException:
             sock.close()
             raise
@@ -53,16 +108,18 @@ class PinnedHTTPS(http.client.HTTPSConnection):
 
 def open_url(url, method='GET', data=None, headers=None, timeout=12):
     extra = dict(headers or {})
-    original_host = urlsplit(url).hostname
+    original = urlsplit(url)
+    original_origin = (original.scheme, original.hostname, original.port or (443 if original.scheme == 'https' else 80))
     for _ in range(6):
         p, host, port, ip = target(url)
-        if host != original_host:
+        if (p.scheme, host, port) != original_origin:
             # Custom API-key header names must not leak to a redirect recipient.
             extra = {k: v for k, v in extra.items() if k.lower() in ('range', 'if-range', 'accept', 'content-type')}
         conn = PinnedHTTPS(host, port, ip, timeout) if p.scheme == 'https' else http.client.HTTPConnection(ip, port, timeout=timeout)
+        agent = WIKIMEDIA_USER_AGENT if host == 'wikimedia.org' or host.endswith('.wikimedia.org') else USER_AGENT
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,
-                         {'Host': p.netloc, 'User-Agent': 'SceneTrace/2.0 (desktop video discovery)', 'Accept-Encoding': 'identity', **extra})
+                         {'Host': p.netloc, 'User-Agent': agent, 'Accept-Encoding': 'identity', **extra})
             r = conn.getresponse()
             if r.status in (301, 302, 303, 307, 308):
                 location = r.getheader('Location')
@@ -77,7 +134,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
                     method, data = 'GET', None
                 continue
             if r.status == 429:
-                raise SourceError('Provider rate limit reached. Retry after ' + str(r.getheader('Retry-After', '60'))[:20] + ' seconds.')
+                raise RateLimitError(r.getheader('Retry-After'))
             if r.status not in (200, 206):
                 raise SourceError(f'Source returned HTTP {r.status}. Check its status or credentials.')
             return conn, r, url
