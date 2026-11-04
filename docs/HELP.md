@@ -1,44 +1,31 @@
-# SceneTrace help
+# SceneTrace owner guide
 
-## Add a database
+## Find an episode
 
-Open Database Hub. Enable the built-in sources you want; **Test connection** makes a real request. TMDB needs your own API Read Access Token.
+Open **Anime**, type a title, and select **View video options** or **Find episodes**. A title from AniList may give you alternate names or exact episode links from an official provider. A connected video website can supply more matches. Pick an episode to load its player. If the player is unavailable, use **Open exact video at source**.
 
-For a file, choose **Import database**. Select an export, inspect the sample and map Title, Description, Year, URL and Media URL as available. Title is required. Choose a SQLite table or JSON records path when needed. **Import and index** displays progress. Failed imports preserve the previous index.
+Try **Pocket Monsters** for the first three official Indigo League episodes. For an in-app video, search **Caminandes** in Universal Video Search and select **Llamigos**.
 
-For an API/feed, choose **Add a source**. Paste the documented endpoint and choose **Detect & preview**. Ordinary websites require API/export documentation rather than automatic integration. Advanced configuration supports parameters, authentication, GraphQL variables and dotted field paths.
+## Search a website you added
 
-**Find More Sources** suggests documented connectors. Optional Brave Search finds candidate websites whose APIs remain unverified; a manual web search is available without a key.
+1. Open **Video Sources → Add Video Website**.
+2. Paste the website, listing or feed URL and choose **Inspect website**.
+3. Review the connection method. Use advanced fields for a documented query parameter, CSS selectors, a JSON mapping or an episode listing.
+4. Enter a sample title and choose **Test integration**. Review the returned pages, playback and download status.
+5. Save the tested configuration. Choose its name in Universal Video Search and search again.
 
-## Search and identify
+**Find More Sources** lists available connectors. Add a Brave Search key in Settings if you want additional web candidates. Discovered sites remain unverified until tested.
 
-Universal Search queries checked sources and the local index. Individual source messages explain failures; other sources continue. Load another page for more provider results.
+## Download a video
 
-In Memory Search, describe whatever you remember. Optional setting, characters, scene, language and decade clues help ranking without excluding every uncertain memory. Evidence labels describe real metadata overlap. Refine and submit again. Difficult scene searches need richer imported descriptions or more suitable catalogs.
+Open a video with eligible files, expand **Download this video**, choose the format and destination, and confirm your authorization. Track or pause the transfer under **Downloads**. An interrupted transfer can resume when its host supports a byte range.
 
-## Locate media
+## Use a description
 
-Open Details and choose **Find Video**. Connected media/hybrid sources are searched by title and alternative names. Trailers/clips are labeled; uploader full-length claims are unconfirmed.
+Open **Memory Search**, describe your remembered scene or plot, and open a match. Choose **Find Video** for source and episode options. More distinctive details and alternative titles can improve the match.
 
-Analyze the actual source link for current formats. Preview uses real source media, subject to browser codecs and source availability. Open the original page when extraction or playback fails. A catalog record does not establish full-video availability.
+## Internet Archive certificate error
 
-## Download
+Open **Settings → Test Archive HTTPS**. SceneTrace uses Windows certificate trust and checks the server hostname. If Windows rejects the chain, compare the same Archive URL in Edge and check the PC clock. On a managed network, have the administrator confirm the certificate issuer used by the proxy or antivirus. The app reports the certificate error code when available.
 
-Analyze first. Select a reported quality/source format, destination and optional MP4/MP3 conversion. Video-only files are explicitly labeled. Confirm authorization, then add to the queue.
-
-Download Center shows progress, speed and ETA when known. Pause preserves partial data. Resume validates byte ranges when supported; otherwise it restarts safely. Cancel removes SceneTrace temporary data. Retry after errors. Expired links may need fresh analysis and a new transfer.
-
-Existing files are preserved using numbered filenames. Disk checks prevent exhaustion; no fixed download-size limit is imposed. Completed files remain in your chosen folder.
-
-## Troubleshoot
-
-- Failed source: test connection, check endpoint/credentials, internet and provider status.
-- No matches: use shorter/different clues, another provider or richer descriptions.
-- Wrong mapped fields: configure the source and refresh its local index.
-- Configuration error: static parameters and GraphQL variables must be JSON objects.
-- Inaccessible media: open the official page; restrictions and DRM are not bypassed.
-- Missing runtime: extract the full ZIP, including _internal.
-- Browser closed: double-click the executable to reopen the running interface.
-- App closed: launch again and resume paused work.
-
-Export sanitized diagnostics from Settings. For a complete backup, quit and copy %LOCALAPPDATA%\SceneTrace. Re-enter DPAPI credentials when moving to another Windows account.
+TMDB's **Optional key needed** label means its catalog needs your own API Read Access Token. Playback from the built-in examples works without that key.

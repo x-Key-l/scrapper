@@ -245,7 +245,7 @@ class Viewing:
         for selected in playable[:4]:
             try:
                 checked = probe_file(selected['url'])
-                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.', quality=selected.get('height'), mime=checked['mime'], direct_url=checked['url'])
+                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.', quality=selected.get('height'), mime=checked['mime'], direct_url=checked['url'], playing_format_id=selected['id'])
                 break
             except (OSError, ValueError) as exc:
                 last_error = str(exc)

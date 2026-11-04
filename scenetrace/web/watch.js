@@ -25,7 +25,7 @@ function watchSearchPage(mode) {
         : source.role !== 'metadata'));
     const categories = [...new Set(active.flatMap(source => source.categories))].sort();
     const options = active.map(source => '<option value="' + esc(source.id) + '"' +
-        (watchState.sourceId === source.id ? ' selected' : '') + '>' + esc(source.name) + '</option>').join('');
+        (visible && watchState.sourceId === source.id ? ' selected' : '') + '>' + esc(source.name) + '</option>').join('');
     const status = visible ? watchState.sources.map(source =>
         '<li>' + esc(source.name) + ' · ' + esc(source.message || (source.count ?? 0) + ' matches') + '</li>').join('') : '';
     const rows = visible ? watchState.rows : [];
@@ -41,8 +41,11 @@ function watchSearchPage(mode) {
         '"><button class="primary">Search</button></form><div class="toolbar"><label for="watch-source">Website</label>' +
         '<select id="watch-source"><option value="">All enabled sources</option>' + options + '</select>' +
         '<label for="watch-category">Category</label><select id="watch-category"><option value="">Any category</option>' +
-        categories.map(category => '<option' + (watchState.category === category ? ' selected' : '') + '>' + esc(category) + '</option>').join('') +
-        '</select></div>' + (visible && watchState.busy ? '<div class="loading">Searching connected sources…</div>' : '') +
+        categories.map(category => '<option' + (visible && watchState.category === category ? ' selected' : '') + '>' + esc(category) + '</option>').join('') +
+        '</select></div><details class="panel"><summary>Select several sources</summary><div class="source-select">' +
+        active.map(source => '<label class="source-chip"><input type="checkbox" data-watch-filter value="' + esc(source.id) + '"' +
+            (!visible || !watchState.selectedIds || watchState.selectedIds.includes(source.id) ? ' checked' : '') + '>' +
+            esc(source.name) + '</label>').join('') + '</div></details>' + (visible && watchState.busy ? '<div class="loading">Searching connected sources…</div>' : '') +
         (visible && watchState.error ? '<div class="notice error" role="alert">' + esc(watchState.error) + '</div>' : '') +
         section('Video results', videos) + section('Title matches', titles) +
         (visible && watchState.query && !watchState.busy && !rows.length && !watchState.error
@@ -54,12 +57,14 @@ function watchSearchPage(mode) {
 async function searchVideos(query, mode, page = 1) {
     const sourceId = $('watch-source')?.value || '';
     const category = $('watch-category')?.value || '';
+    const filters = [...document.querySelectorAll('[data-watch-filter]')];
+    const selectedIds = filters.length ? filters.filter(input => input.checked).map(input => input.value) : null;
     const request = ++watchState.request;
-    Object.assign(watchState, {query, mode, page, category, sourceId, busy: true, error: '', more: false});
+    Object.assign(watchState, {query, mode, page, category, sourceId, selectedIds, busy: true, error: '', more: false});
     if (page === 1) Object.assign(watchState, {rows: [], sources: []});
     renderPage();
     try {
-        const result = await api('watch/search', {query, mode, page, category, sources: sourceId ? [sourceId] : null});
+        const result = await api('watch/search', {query, mode, page, category, sources: sourceId ? [sourceId] : selectedIds});
         if (request !== watchState.request) return;
         const rows = new Map([...watchState.rows, ...result.results].map(record => [record.id, record]));
         Object.assign(watchState, {rows: [...rows.values()], sources: result.sources, more: result.has_more});
@@ -101,7 +106,7 @@ async function showViewing(record) {
 
 function watchDownload(result) {
     if (!result.formats.length) return '<p class="meta">The source offers viewing through the options above.</p>';
-    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '">' +
+    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '"' + (format.id === result.playing_format_id ? ' selected' : '') + '>' +
         esc([format.height && format.height + 'p', format.label, format.ext.toUpperCase(),
             format.video && !format.audio ? 'video only' : null, bytes(format.size)].filter(Boolean).join(' · ')) + '</option>').join('');
     return '<details class="panel"><summary>Download this video</summary><form data-watch-form="download" data-analysis="' + esc(result.analysis_id) + '">' +

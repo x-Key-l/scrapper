@@ -142,3 +142,18 @@ def test_source_discovery_keeps_metadata_out_of_video_suggestions():
     result = find('searchable anime episode catalogs', video_only=True)
     assert result['providers']
     assert all(source['role'] != 'metadata' and source['tested'] is False for source in result['providers'])
+
+
+def test_video_gallery_upgrade_preserves_existing_profile(tmp_path):
+    from scenetrace.store import Store
+    from scenetrace.sources import defaults
+    store = Store(tmp_path / 'profile')
+    store.set_setting('gallery_initialized', True)
+    store.set_setting('destination', 'existing-folder')
+    store.save({'id': 'saved:previous-release', 'title': 'Existing title'})
+    store.history('existing search', 'memory')
+    defaults(store)
+    assert store.setting('destination') == 'existing-folder'
+    assert store.saved()[0]['id'] == 'saved:previous-release'
+    assert store.history()[0]['query'] == 'existing search'
+    assert {source['id'] for source in store.sources()} == {'open-animation', 'pokemon-tv'}

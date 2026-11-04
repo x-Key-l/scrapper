@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+import urllib.error
 
 import imageio_ffmpeg
 
@@ -35,8 +36,12 @@ def run(command):
             def post(path, payload):
                 request = urllib.request.Request(address+'/api/'+path, json.dumps(payload).encode(),
                                                   {'Content-Type': 'application/json', 'X-SceneTrace': 'local'})
-                with opener.open(request, timeout=65) as reply:
-                    return json.load(reply)
+                try:
+                    with opener.open(request, timeout=65) as reply:
+                        return json.load(reply)
+                except urllib.error.HTTPError as error:
+                    detail = json.loads(error.read()).get('detail', str(error))
+                    raise AssertionError(path + ' failed · ' + detail) from error
 
             report = []
             found = post('watch/search', {'query': 'Pocket Monsters', 'mode': 'anime', 'sources': ['pokemon-tv']})
@@ -60,7 +65,7 @@ def run(command):
                 assert reply.status == 206, reply.status
                 header = reply.read(1024)
                 assert header and (header.startswith(b'\x1aE\xdf\xa3') or b'ftyp' in header[:32])
-            fmt = min((f for f in episode['formats'] if f['ext'] == 'webm'), key=lambda f: abs((f.get('height') or 720)-360))
+            fmt = next(f for f in episode['formats'] if f['id'] == episode['playing_format_id'])
             job = post('download/add', {'analysis_id': episode['analysis_id'], 'format_id': fmt['id'],
                                         'destination': folder, 'authorized': True, 'output': 'original'})
             for _ in range(110):
