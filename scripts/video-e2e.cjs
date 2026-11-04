@@ -32,6 +32,12 @@ async function run() {
         page.setDefaultTimeout(45000);
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
+        page.on('response', async response => {
+            if (response.request().resourceType() !== 'media') return;
+            const headers = await response.allHeaders();
+            console.log('Media transport', response.status(), response.request().headers().range,
+                headers['content-range'], headers['content-length'], headers['content-type']);
+        });
         await page.goto(address);
         await page.getByRole('button', {name: 'Start discovering →'}).click();
         await page.getByRole('button', {name: 'Anime', exact: true}).click();

@@ -124,7 +124,7 @@ async function selectEpisode(index) {
         watchState.result = result;
         let playback = '';
         if (result.playback === 'direct' && /^\/media\/[A-Za-z0-9_-]+$/.test(result.stream)) {
-            playback = '<video id="episode-video" controls playsinline preload="metadata" src="' + esc(result.stream) + '">' +
+            playback = '<video id="episode-video" controls playsinline preload="metadata" src="' + esc(link(result.direct_url) || result.stream) + '">' +
                 (result.subtitles || []).map(track => '<track kind="subtitles" src="' + esc(track.url) + '" srclang="' +
                     esc(track.language) + '" label="' + esc(track.label) + '">').join('') + '</video>' +
                 '<label for="play-speed">Speed</label><select id="play-speed"><option>0.5</option><option selected>1</option>' +
@@ -141,7 +141,14 @@ async function selectEpisode(index) {
             '<p>' + external(result.original, 'Open exact video at source') + '</p>' +
             (result.license ? '<p class="meta">License · ' + esc(result.license) + ' · ' + esc(result.attribution) + '</p>' : '') +
             neighbors + watchDownload(result);
-        $('episode-video')?.addEventListener('error', () => {
+        const video = $('episode-video');
+        video?.addEventListener('error', () => {
+            if (video.getAttribute('src') !== result.stream) {
+                const shouldPlay = !video.paused;
+                video.src = result.stream;
+                if (shouldPlay) video.play().catch(() => {});
+                return;
+            }
             if ($('play-error')) $('play-error').textContent = 'This file could not play in your browser. Open the exact video at its source.';
         });
         player.scrollIntoView({block: 'nearest'});
