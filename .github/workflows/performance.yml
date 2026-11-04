@@ -1,0 +1,37 @@
+name: Paired Windows backend and external browser baseline
+on:
+  push:
+    branches: ['build/intelligent-browser-v4']
+    paths: ['scripts/v4_audit.py', 'scripts/browser_benchmark.cjs', '.github/workflows/performance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 5383d468d3ce0fe2c21e2b86f80636399707869b
+          path: baseline
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: npm ci
+      - name: Original source backend
+        run: python scripts/v4_audit.py --root baseline --output artifacts/performance/v3 --skip-website
+      - name: New source backend on the same runner
+        run: python scripts/v4_audit.py --root . --revision v4-branch --output artifacts/performance/v4 --skip-website
+      - name: Measure v3 in system Edge
+        run: node scripts/browser_benchmark.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paired-windows-performance
+          path: artifacts/performance/

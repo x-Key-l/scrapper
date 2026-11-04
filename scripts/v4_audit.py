@@ -14,14 +14,17 @@ import psutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', default='.')
+parser.add_argument('--output', default='artifacts/v4-baseline')
+parser.add_argument('--revision', default='5383d468d3ce0fe2c21e2b86f80636399707869b')
+parser.add_argument('--skip-website', action='store_true')
 args = parser.parse_args()
 root = Path(args.root).resolve()
 sys.path.insert(0, str(root))
 from scenetrace import network, websites
 
-out = Path('artifacts/v4-baseline')
+out = Path(args.output)
 out.mkdir(parents=True, exist_ok=True)
-report = {'platform': sys.platform, 'revision': '5383d468d3ce0fe2c21e2b86f80636399707869b'}
+report = {'platform': sys.platform, 'revision': args.revision}
 
 
 def post(address, path, body):
@@ -76,6 +79,11 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-v3-benchmark-') as folder:
                 process.wait()
     report['backend'] = measurements
     report['measurement_scope'] = 'Source application on shared CI hardware. Browser process measurements are recorded separately.'
+
+if args.skip_website:
+    (out/'backend.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+    print(json.dumps(report,indent=2))
+    raise SystemExit(0)
 
 value = 'https://hianime.ms/'
 diagnostic = {'website': value, 'query': 'Naruto'}

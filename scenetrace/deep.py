@@ -6,11 +6,12 @@ from collections import Counter
 from difflib import SequenceMatcher
 
 STOP = set('i me my we our a an the and or is was were be been being this that those it its in on at to of for from by with without as then than but had have has watched saw remember years ago only about where who which he she they met main character show movie video series find looking like called some near into also very when can could would please dont know anime film old maybe think probably something'.split())
+STOP.update('him her his hers their them one people someone person discovers discover encounters encounter'.split())
 GROUPS = [
     ('boy', 'young', 'child', 'kid'), ('girl', 'young', 'child'), ('creature', 'beast', 'monster', 'demon'),
     ('fighter', 'ninja', 'warrior', 'martial'), ('transported', 'portal', 'isekai', 'reincarnated'),
     ('world', 'realm'), ('underground', 'cave', 'cavern', 'descent'), ('forest', 'woods'),
-    ('teacher', 'mentor', 'sensei', 'instructor'), ('eye', 'eyepatch', 'mask', 'covered'),
+    ('teacher', 'mentor', 'sensei', 'instructor', 'leader'), ('eye', 'eyepatch', 'mask', 'covered', 'headband'),
     ('criminal', 'crime', 'police', 'gang'), ('fight', 'battle', 'combat'), ('spirit', 'ghost', 'supernatural'),
     ('notebook', 'book', 'diary'), ('death', 'kill', 'murder'), ('space', 'spaceship', 'alien'),
     ('robot', 'android', 'mecha'), ('animated', 'animation', 'anime'), ('school', 'academy', 'student'),
@@ -51,7 +52,7 @@ def understand(query, hints=None):
     decade = re.search(r'\b((?:18|19|20)\d)0s\b', query)
     date = re.search(r'\b(?:18|19|20)\d{2}\b', query)
     year = int(hints['decade']) if str(hints.get('decade', '')).isdigit() else int(decade[1])*10 if decade else int(date[0]) if date else None
-    genre = next((g for g in ('Fantasy', 'Sci-Fi', 'Action', 'Romance', 'Horror', 'Comedy', 'Adventure', 'Mystery', 'Drama') if g.casefold() in query.casefold()), None)
+    genre = hints.get('genre') or next((g for g in ('Fantasy', 'Sci-Fi', 'Action', 'Romance', 'Horror', 'Comedy', 'Adventure', 'Mystery', 'Drama') if g.casefold() in query.casefold()), None)
     if not genre:
         rules = {'Fantasy': ('portal', 'isekai', 'magic', 'reincarnated'), 'Action': ('ninja', 'fighter', 'fight', 'warrior'),
                  'Horror': ('dangerous creatures', 'underground', 'monsters', 'murder'), 'Mystery': ('notebook', 'detective')}
@@ -64,6 +65,10 @@ def understand(query, hints=None):
     character = str(hints.get('character') or '')
     if not actor and not category and names:
         actor = names[0]
+    if not actor and not category:
+        explicit_actor = re.search(r'\b(?:starring|actor|with)\s+([a-z]+(?:\s+[a-z]+){1,2})(?=\s+(?:where|who|in|as)|[,.!?]|$)', query, re.I)
+        if explicit_actor:
+            actor = explicit_actor[1]
     if not character and category == 'anime' and names:
         character = names[0]
     quoted = re.findall(r'["“]([^"”]+)["”]', query)
@@ -130,6 +135,13 @@ def rank(query, records, analysis=None):
                 name = person.get('name', '') if isinstance(person, dict) else person
                 description = person.get('description', '') if isinstance(person, dict) else ''
                 overlap = wanted & set(terms(name + ' ' + description))
+                person_terms = set(terms(name + ' ' + description))
+                if field == 'characters' and analysis.get('character_description'):
+                    groups = [set(stem(w) for w in group) for group in GROUPS]
+                    group_hits = [g for g in groups if g & wanted and g & person_terms]
+                    score += min(8., 1.5*len(group_hits))
+                    if any(g & {'teacher', 'mentor', 'sensei'} and g & wanted and g & person_terms for g in groups):
+                        score += 3
                 if hint and similarity(hint, name) >= .72:
                     score += 7
                     evidence.append(label + ': ' + name)

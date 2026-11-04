@@ -9,10 +9,12 @@ from scenetrace import websites, sources
 from scenetrace.app import App
 from scenetrace.deep_sources import retrieve
 from scenetrace.deep import understand, rank
+from scenetrace.search import deduplicate
 
 out = Path('artifacts/v4-live')
 out.mkdir(parents=True, exist_ok=True)
 report = {'website_tests': [], 'deep_catalog_tests': []}
+corpus = []
 with tempfile.TemporaryDirectory() as folder:
     app = App(folder, None)
     try:
@@ -46,6 +48,8 @@ with tempfile.TemporaryDirectory() as folder:
             start = time.perf_counter()
             try:
                 rows, more = retrieve(app.source(kind), query, understand(query,hints), app.store)
+                rows = deduplicate(rows)
+                corpus.extend(rows)
                 ranked = rank(query, rows, understand(query,hints))
                 check.update(count=len(rows), seconds=round(time.perf_counter()-start,3),
                              top_ten=[{'title':r['title'],'id':r['id'],'evidence':r['evidence']} for r in ranked[:10]])
@@ -57,3 +61,4 @@ with tempfile.TemporaryDirectory() as folder:
         app.close()
 (out/'results.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
 print(json.dumps(report,indent=2))
+(out/'corpus.json').write_text(json.dumps(deduplicate(corpus)), encoding='utf-8')

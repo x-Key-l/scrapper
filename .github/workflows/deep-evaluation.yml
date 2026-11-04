@@ -1,0 +1,29 @@
+name: Deep Search live evaluation and baseline comparison
+on:
+  push:
+    branches: ['build/intelligent-browser-v4']
+    paths: ['scenetrace/deep*', 'scripts/evaluate_deep.py', '.github/workflows/deep-evaluation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 5383d468d3ce0fe2c21e2b86f80636399707869b
+          path: baseline
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Evaluate cold live retrieval and identical-corpus ranking
+        run: python scripts/evaluate_deep.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deep-search-evaluation
+          path: artifacts/deep-evaluation/

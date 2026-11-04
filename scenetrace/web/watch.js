@@ -345,7 +345,12 @@ document.addEventListener('submit', async event => {
     try {
         if (action === 'inspect') {
             $('website-inspection').innerHTML = '<p class="loading">Inspecting public website…</p>';
-            showWebsiteConfig(await api('watch/inspect', values));
+            let detected;
+            try {detected = await api('watch/inspect', values);}
+            catch (error) {detected = {name: new URL(values.url).hostname, endpoint: values.url, strategy: 'browse', findings: [error.message]};}
+            detected.query ||= 'video';
+            showWebsiteConfig(detected);
+            document.querySelector('[data-site-form="test"]').requestSubmit();
         } else if (action === 'test') {
             $('website-test').innerHTML = '<p class="loading">Searching and checking a sample page…</p>';
             const webConfig = Object.fromEntries(websiteFields.map(([key]) => [key, values[key] || '']));

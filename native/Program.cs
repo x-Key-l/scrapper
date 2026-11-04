@@ -74,6 +74,7 @@ namespace SceneTrace
         private bool closing;
         private BrowserTab appTab;
         private readonly Stopwatch started = Stopwatch.StartNew();
+        private readonly TaskCompletionSource<bool> browserExited = new TaskCompletionSource<bool>();
 
         internal BrowserWindow()
         {
@@ -135,7 +136,15 @@ namespace SceneTrace
                 if (focusEvent?.WaitOne(0) == true) { WindowState = FormWindowState.Normal; Show(); Activate(); }
             };
             Shown += async (s, e) => await StartBrowser();
-            FormClosing += (s, e) => { closing = true; activity.Stop(); };
+            FormClosing += async (s, e) => {
+                if (closing) return;
+                e.Cancel = true;
+                closing = true;
+                activity.Stop();
+                foreach (var tab in openTabs.ToArray()) DisposeTab(tab);
+                if (environment != null) await Task.WhenAny(browserExited.Task, Task.Delay(3000));
+                Close();
+            };
             FormClosed += (s, e) => {
                 foreach (var tab in openTabs.ToArray()) DisposeTab(tab);
                 focusEvent?.Dispose();
@@ -163,6 +172,7 @@ namespace SceneTrace
             {
                 Directory.CreateDirectory(profile);
                 environment = await CoreWebView2Environment.CreateAsync(null, profile);
+                environment.BrowserProcessExited += (sender, eventArgs) => browserExited.TrySetResult(true);
                 appTab = CreateTab(appOrigin, true);
                 tabs.SelectedTab = appTab.Page;
                 await EnsureTab(appTab);

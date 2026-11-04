@@ -123,7 +123,7 @@ async function run() {
         await page.screenshot({path: 'artifacts/added-website-playing.png', fullPage: true});
         console.log('W3Schools: inspected, tested, saved, searched, and played a real HTML video without a media URL or API.');
         await page.getByRole('button', {name: 'Close dialog'}).click();
-        await page.getByRole('button', {name: 'Memory Search', exact: true}).click();
+        await page.getByRole('button', {name: 'Deep Search', exact: true}).click();
         await page.getByRole('textbox', {name: 'Describe the video you remember'}).fill('llama Patagonia');
         const chips = page.locator('[data-source]');
         for (let i = 0; i < await chips.count(); i++) {
@@ -135,7 +135,7 @@ async function run() {
         await page.getByRole('button', {name: 'Details', exact: true}).click();
         await page.getByRole('button', {name: /Find Video/i}).click();
         await page.getByRole('button', {name: /Episode 3 · Llamigos/}).waitFor();
-        console.log('Memory Search: plot clues found Caminandes and led to the real episode list.');
+        console.log('Deep Search: plot clues found Caminandes and led to the real episode list.');
         assert.deepEqual(errors, []);
     } finally {
         if (browser) await browser.close();

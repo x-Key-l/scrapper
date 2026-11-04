@@ -24,7 +24,7 @@ def post(address, path, body):
         return json.load(response)
 
 
-with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-') as profile:
+with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_errors=True) as profile:
     reports = []
     for index in range(2):
         report = artifacts / ('cold.json' if index == 0 else 'warm.json')

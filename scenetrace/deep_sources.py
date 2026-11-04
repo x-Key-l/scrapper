@@ -76,12 +76,15 @@ def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
         body = {'query': 'query'+declaration+'{Page(page:$page,perPage:50){characters('+args+'){'+CHARACTER+
                          ' media(type:ANIME,perPage:8,sort:POPULARITY_DESC){nodes{'+MEDIA+'}}}}}',
                 'variables': dict(page=page, **({'name': name} if name else {}))}
-        raw = cached(['characters', name, page], lambda: graphql(body), 86400)
         output = []
-        for character in (raw.get('Page') or {}).get('characters', []) if isinstance(raw, dict) else []:
-            person = character_record(character)
-            for anime in (character.get('media') or {}).get('nodes', []):
-                output.append(anime_record(source, anime, [person]))
+        for character_page in ([page] if name else [(page-1)*2+1, (page-1)*2+2]):
+            if cancelled(): break
+            body['variables']['page'] = character_page
+            raw = cached(['characters', name, character_page], lambda: graphql(body), 86400)
+            for character in (raw.get('Page') or {}).get('characters', []) if isinstance(raw, dict) else []:
+                person = character_record(character)
+                for anime in (character.get('media') or {}).get('nodes', []):
+                    output.append(anime_record(source, anime, [person]))
         return output, len(output) >= 50
 
     if kind == 'anilist' and not analysis.get('title_like'):
@@ -102,7 +105,12 @@ def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
             return [], False
         actor = analysis.get('actor')
         if actor:
-            return cached(['actor', actor], lambda: apple_movies(source, actor, 'actorTerm')), False
+            rows = cached(['actor', actor], lambda: apple_movies(source, actor, 'actorTerm'))
+            if not rows:
+                rows = cached(['actor-all-fields', actor], lambda: apple_movies(source, actor))
+                for row in rows:
+                    row['retrieval_evidence'] = ['Apple catalog name search: '+actor+'; a search match is not a verified cast credit']
+            return rows, False
         distinctive = [t for t in analysis['terms'] if len(t) > 4 and not t.isdigit()][:2]
         output = []
         for term in distinctive:

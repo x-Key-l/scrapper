@@ -63,8 +63,13 @@ namespace SceneTrace
                 await WaitFor(tab, "document.title === 'SceneTrace browser fixture one'");
                 if (tab.View.CoreWebView2.Settings.IsWebMessageEnabled || tab.View.CoreWebView2.Settings.AreHostObjectsAllowed)
                     throw new InvalidOperationException("External website bridge was enabled.");
-                string bridge = await tab.View.CoreWebView2.ExecuteScriptAsync("(()=>{try{window.chrome.webview.postMessage({action:'open',url:'file:///C:/'});return false}catch(e){return true}})()");
-                if (bridge != "true") throw new InvalidOperationException("Website posted a native message.");
+                int receivedMessages = 0;
+                EventHandler<CoreWebView2WebMessageReceivedEventArgs> trap = (sender, message) => receivedMessages++;
+                tab.View.CoreWebView2.WebMessageReceived += trap;
+                await tab.View.CoreWebView2.ExecuteScriptAsync("(()=>{try{window.chrome.webview.postMessage({action:'open',url:'file:///C:/'});}catch(e){}})()");
+                await Task.Delay(300);
+                tab.View.CoreWebView2.WebMessageReceived -= trap;
+                if (receivedMessages != 0) throw new InvalidOperationException("Website delivered a native message.");
                 // ExecuteScriptAsync does not unwrap promises. Record the asynchronous result in a test-page variable.
                 await tab.View.CoreWebView2.ExecuteScriptAsync(
                     "window.isolationResult='pending';fetch(" + json.Serialize(appOrigin + "/api/state") +
@@ -84,6 +89,26 @@ namespace SceneTrace
                 await WaitFor(tab, "window.getSelection().toString().includes('Second page')");
                 checks.Add("Address navigation, back, forward, refresh and find text");
                 measurements.Add(BrowserMemory("One website tab"));
+                var failedNavigation = new TaskCompletionSource<bool>();
+                EventHandler<CoreWebView2NavigationCompletedEventArgs> failure = (sender, args) => { if (!args.IsSuccess) failedNavigation.TrySetResult(true); };
+                tab.View.CoreWebView2.NavigationCompleted += failure;
+                tab.View.CoreWebView2.Navigate("https://scenetrace-error.invalid/");
+                if (await Task.WhenAny(failedNavigation.Task, Task.Delay(25000)) != failedNavigation.Task)
+                    throw new InvalidOperationException("Navigation error was not reported.");
+                tab.View.CoreWebView2.NavigationCompleted -= failure;
+                tab.View.CoreWebView2.Navigate("https://fixture.scenetrace.test/two.html");
+                await WaitFor(tab, "document.title === 'SceneTrace browser fixture two'");
+                checks.Add("Network navigation failure reported and tab recovered");
+                var crashed = new TaskCompletionSource<bool>();
+                EventHandler<CoreWebView2ProcessFailedEventArgs> crash = (sender, args) => crashed.TrySetResult(true);
+                tab.View.CoreWebView2.ProcessFailed += crash;
+                var crashRequest = tab.View.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.crash", "{}");
+                if (await Task.WhenAny(crashed.Task, Task.Delay(10000)) != crashed.Task)
+                    throw new InvalidOperationException("Renderer crash notification was not received.");
+                tab.View.CoreWebView2.ProcessFailed -= crash;
+                Reload();
+                await WaitFor(tab, "document.title === 'SceneTrace browser fixture two'");
+                checks.Add("Actual renderer crash detected and Refresh restored the tab");
                 var lazy = CreateTab("https://fixture.scenetrace.test/one.html");
                 if (lazy.View != null) throw new InvalidOperationException("Background tab was allocated eagerly.");
                 tabs.SelectedTab = lazy.Page;
