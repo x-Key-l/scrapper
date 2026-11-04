@@ -12,6 +12,13 @@ from . import network
 from .model import record, text, field, flatten, url
 
 GALLERY = [
+    dict(id='pokemon-tv', name='Pokémon TV', kind='pokemon-tv', role='media', categories=['anime'],
+         description='Official English Indigo League episode pages. Starter selection of episodes 1–3.',
+         website='https://www.youtube.com/@OfficialPokemonTV', endpoint='https://www.youtube.com', auth='None'),
+    dict(id='open-animation', name='Caminandes on Commons', kind='open-animation', role='hybrid', categories=['animation'],
+         description='Three open-license animated episodes with playable formats from Wikimedia Commons.',
+         website='https://commons.wikimedia.org/wiki/Category:Caminandes', endpoint='https://commons.wikimedia.org', auth='None'),
+
     dict(id='tvmaze', name='TVmaze', kind='tvmaze', role='metadata', categories=['series', 'anime'], description='Television and animation titles, summaries, genres and external IDs.', website='https://www.tvmaze.com', docs='https://www.tvmaze.com/api', endpoint='https://api.tvmaze.com', auth='None'),
     dict(id='anilist', name='AniList', kind='anilist', role='metadata', categories=['anime'], description='Anime titles, alternative names, synopses and artwork.', website='https://anilist.co', docs='https://docs.anilist.co', endpoint='https://graphql.anilist.co', auth='None'),
     dict(id='archive', name='Internet Archive', kind='archive', role='hybrid', categories=['movie', 'documentary', 'archive', 'educational', 'music', 'video'], description='Public archival catalogs with item pages and available media files.', website='https://archive.org', docs='https://archive.org/developers', endpoint='https://archive.org', auth='None'),
@@ -33,13 +40,20 @@ ALIASES = {
 
 
 def defaults(store):
-    if store.setting('gallery_initialized', False):
-        return
     existing = {s['id'] for s in store.sources()}
-    for s in GALLERY:
-        if s['id'] not in existing:
-            store.put_source(dict(s, enabled=s['id'] != 'tmdb', health='Untested', last_sync=None, mapping={}))
-    store.set_setting('gallery_initialized', True)
+    initialized = store.setting('gallery_initialized', False)
+    video_initialized = store.setting('video_gallery_initialized', False)
+    for source in GALLERY:
+        fresh = not initialized or (
+            not video_initialized and source['kind'] in ('pokemon-tv', 'open-animation')
+        )
+        if fresh and source['id'] not in existing:
+            health = 'Optional key needed' if source['id'] == 'tmdb' else 'Untested'
+            store.put_source(dict(source, enabled=source['id'] != 'tmdb', health=health, last_sync=None, mapping={}))
+    if not initialized:
+        store.set_setting('gallery_initialized', True)
+    if not video_initialized:
+        store.set_setting('video_gallery_initialized', True)
 
 
 def validate(config, previous=None):
@@ -188,6 +202,9 @@ def _search(s, q, page, memory=None):
     def rec(ident, title, **kw):
         return record(sid, ident, title, source_name=name, **kw)
     more = False
+    if kind in ('pokemon-tv', 'open-animation'):
+        from .open_catalog import search as search_open_catalog
+        return search_open_catalog(s, q, page)
     if kind == 'tvmaze':
         if page > 1:
             return [], False
@@ -198,19 +215,19 @@ def _search(s, q, page, memory=None):
             ids = {k: str(v) for k, v in (x.get('externals') or {}).items() if v}
             hits.append(rec(x['id'], x['name'], description=x.get('summary'), year=x.get('premiered'), category='anime' if x.get('type') == 'Animation' else 'series', genres=x.get('genres'), thumbnail=(x.get('image') or {}).get('original'), url=x.get('url'), duration=(x.get('runtime') or 0)*60 or None, languages=[x['language']] if x.get('language') else [], external_ids=ids))
     elif kind == 'anilist':
-        args = 'type:ANIME,search:$query'
+        args = 'type:ANIME,isAdult:false,search:$query,sort:SEARCH_MATCH'
         variables = {'query': q, 'page': page}
         declaration = '$query:String,$page:Int'
         # Title APIs cannot answer a paragraph. Genre/year browsing retrieves real candidates.
         if memory and memory.get('genre'):
-            args = 'type:ANIME,genre:$genre'
+            args = 'type:ANIME,isAdult:false,genre:$genre'
             declaration += ',$genre:String'
             variables['genre'] = memory['genre']
             if memory.get('year_from'):
                 args += ',startDate_greater:$after'
                 declaration += ',$after:FuzzyDateInt'
                 variables['after'] = memory['year_from']*10000
-        raw = network.json_request(base, {'query': 'query('+declaration+'){Page(page:$page,perPage:25){pageInfo{hasNextPage} media('+args+'){id title{romaji english native} synonyms description(asHtml:false) startDate{year} genres coverImage{large} siteUrl duration externalLinks{url site type}}}}', 'variables': variables})
+        raw = network.json_request(base, {'query': 'query('+declaration+'){Page(page:$page,perPage:25){pageInfo{hasNextPage} media('+args+'){id title{romaji english native} synonyms description(asHtml:false) startDate{year} genres coverImage{large} siteUrl duration format episodes season streamingEpisodes{title thumbnail url site}}}}', 'variables': variables})
         if raw.get('errors'):
             raise network.SourceError('AniList rejected the query or is rate limited.')
         data = raw.get('data', {}).get('Page') or {}
@@ -218,7 +235,8 @@ def _search(s, q, page, memory=None):
         hits = []
         for x in data.get('media') or []:
             titles = x.get('title') or {}
-            hits.append(rec(x['id'], titles.get('english') or titles.get('romaji') or titles.get('native'), alternatives=list(dict.fromkeys([v for v in titles.values() if v] + (x.get('synonyms') or []))), description=x.get('description'), year=(x.get('startDate') or {}).get('year'), category='anime', genres=x.get('genres'), thumbnail=(x.get('coverImage') or {}).get('large'), url=x.get('siteUrl'), duration=(x.get('duration') or 0)*60 or None))
+            hits.append(rec(x['id'], titles.get('english') or titles.get('romaji') or titles.get('native'), alternatives=list(dict.fromkeys([v for v in titles.values() if v] + (x.get('synonyms') or []))), description=x.get('description'), year=(x.get('startDate') or {}).get('year'), category='anime', genres=x.get('genres'), thumbnail=(x.get('coverImage') or {}).get('large'), url=x.get('siteUrl'), duration=(x.get('duration') or 0)*60 or None, external_ids={'anilist':str(x['id'])}))
+            hits[-1].update(episode_count=x.get('episodes'), edition=x.get('format'), release_season=x.get('season'), episode_links=x.get('streamingEpisodes') or [])
     elif kind == 'archive':
         words = re.findall(r'[\w]+', q)
         phrase = ' OR '.join('"' + w + '"' for w in words)

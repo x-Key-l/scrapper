@@ -10,8 +10,9 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from . import __version__, discovery, importing, media, sources
+from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
+from .viewing import Viewing, probe_file
 from .search import SearchEngine
 from .store import Store, protect
 
@@ -26,6 +27,7 @@ class App:
         self.search = SearchEngine(self.store)
         self.downloads = DownloadManager(self.store, proxy)
         self.analyses = {}
+        self.viewing = Viewing(self)
         self.uploads = {}
         self.tasks = {}
         self.task_lock = threading.Lock()
@@ -161,7 +163,9 @@ class App:
         return self.task('Import '+c['name'],work)
 
     def analyze(self, value):
-        result=media.analyze(value,self.proxy)
+        return self.register_analysis(media.analyze(value,self.proxy))
+
+    def register_analysis(self, result):
         key=uuid.uuid4().hex
         self.analyses[key]=result
         for old,v in list(self.analyses.items()):
@@ -193,6 +197,8 @@ class App:
         fmt=next((f for f in a.get('formats',[]) if f['id']==body.get('format_id')),None)
         if not fmt:
             raise ValueError('Select an available quality and format.')
+        if a.get('download_allowed') and fmt.get('method') == 'direct':
+            probe_file(fmt['url'], browser=False)
         dest=body.get('destination') or self.store.setting('destination',str(self.folder))
         return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
 
@@ -268,6 +274,15 @@ class App:
 
     def call(self, path, body):
         if path=='/api/state': return self.state()
+        if path=='/api/watch/search': return self.viewing.search(body)
+        if path=='/api/watch/details':
+            item = body.get('record')
+            if not isinstance(item, dict) or not item.get('title'):
+                raise ValueError('Select a title first.')
+            return self.viewing.details(item)
+        if path=='/api/watch/play': return self.viewing.play(body.get('ticket', ''))
+        if path=='/api/network/tls': return network.tls_diagnostics('https://archive.org/metadata/BigBuckBunny_328')
+
         if path=='/api/search':
             hints=body.get('hints') or {}
             query=body.get('query','')

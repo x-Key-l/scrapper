@@ -1,2 +1,4 @@
 yt-dlp==2026.10.26
 imageio-ffmpeg==0.6.0
+beautifulsoup4==4.14.3
+truststore==0.10.4

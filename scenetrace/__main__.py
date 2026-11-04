@@ -6,6 +6,7 @@ import json
 import logging
 import logging.handlers
 import os
+import re
 import secrets
 import signal
 import sys
@@ -16,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from . import __version__
+from . import network
 from .network import start_proxy
 from .app import App
 
@@ -36,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
         for k,v in {'Content-Type':mime,'Content-Length':str(len(data)),'Cache-Control':'no-store',
                     'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
                     'Cross-Origin-Resource-Policy':'same-origin',
-                    'Content-Security-Policy':"default-src 'self'; img-src 'self' https: data:; media-src https:; connect-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}.items():
+                    'Content-Security-Policy':"default-src 'self'; img-src 'self' https: data:; media-src 'self' https:; frame-src https:; connect-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}.items():
             self.send_header(k,v)
         self.end_headers()
         try:self.wfile.write(data)
@@ -48,12 +50,56 @@ class Handler(BaseHTTPRequestHandler):
         path=urlsplit(self.path).path
         if path=='/health':
             return self.send(200,{'app':'SceneTrace','status':'ok','version':__version__,'instance':self.server.instance})
+        if path.startswith('/media/'):
+            return self.stream(path.removeprefix('/media/'))
         asset='index.html' if path=='/' else path.lstrip('/')
         # Serve only flat bundled assets, never arbitrary local paths.
-        if asset not in ('index.html','style.css','app.js','icon.svg'):
+        if asset not in ('index.html','style.css','app.js','watch.js','icon.svg'):
             return self.send(404,{'detail':'Not found.'})
         file=PUBLIC/asset
         return self.send(200,file.read_bytes(),MIME.get(file.suffix,'application/octet-stream'))
+    def stream(self, ticket):
+        if self.headers.get('Sec-Fetch-Site', 'same-origin') not in ('same-origin', 'none'):
+            return self.send(403, {'detail':'Open playback from SceneTrace.'})
+        try:
+            stream = self.server.app.viewing.get_ticket(ticket, 'stream')
+        except ValueError as error:
+            return self.send(404, {'detail':str(error)})
+        byte_range = self.headers.get('Range')
+        if byte_range and not re.fullmatch(r'bytes=(?:\d+-\d*|-\d+)', byte_range):
+            return self.send(416, {'detail':'Unsupported byte range.'})
+        if not self.server.media_slots.acquire(False):
+            return self.send(429, {'detail':'Close another player and retry.'})
+        connection = None
+        try:
+            headers = {'Range': byte_range} if byte_range else {}
+            connection, response, _ = network.open_url(stream['url'], headers=headers)
+            remote_type = response.getheader('Content-Type', '').split(';')[0].lower()
+            if remote_type in ('text/html', 'application/json'):
+                raise ValueError('The media URL no longer serves video.')
+            self.send_response(response.status)
+            self.send_header('Content-Type', stream['mime'])
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Cross-Origin-Resource-Policy', 'same-origin')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            for field, pattern in (
+                ('Content-Length', r'\d+'), ('Content-Range', r'bytes \d+-\d+/(?:\d+|\*)'),
+                ('Accept-Ranges', r'bytes'),
+            ):
+                value = response.getheader(field, '')
+                if re.fullmatch(pattern, value):
+                    self.send_header(field, value)
+            self.end_headers()
+            while chunk := response.read(65536):
+                self.wfile.write(chunk)
+        except (OSError, ValueError) as error:
+            if connection is None:
+                self.send(502, {'detail':str(error) if isinstance(error, ValueError) else 'The video host disconnected.'})
+        finally:
+            if connection:
+                connection.close()
+            self.server.media_slots.release()
+
     def do_POST(self):
         if not self.host_ok(): return self.send(403,{'detail':'Local access only.'})
         origins=(f'http://127.0.0.1:{self.server.server_port}',f'http://localhost:{self.server.server_port}')
@@ -96,6 +142,7 @@ def make_server(root,port=0):
     server.daemon_threads=True
     server.instance=secrets.token_urlsafe(24)
     server.slots=threading.BoundedSemaphore(10)
+    server.media_slots=threading.BoundedSemaphore(8)
     server.app=app
     server.proxy=proxy
     return server

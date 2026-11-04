@@ -1,0 +1,280 @@
+"""Search, resolve episodes, and open a verified viewing option."""
+import concurrent.futures
+import re
+import secrets
+import time
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
+
+from . import media, network, open_catalog, sources
+from .model import url
+
+BROWSER_VIDEO = {'.mp4': 'video/mp4', '.webm': 'video/webm', '.ogv': 'video/ogg'}
+EXTERNAL_EPISODES = {
+    'www.crunchyroll.com': r'/(?:[a-z-]+/)?watch/[^/]+',
+    'www.hulu.com': r'/watch/[^/]+',
+    'www.hidive.com': r'/video/[^/]+',
+    'www.netflix.com': r'/watch/[^/]+',
+    'tubitv.com': r'/tv-shows/[^/]+',
+}
+
+
+def youtube_id(value):
+    parsed = urlsplit(value)
+    if parsed.scheme != 'https':
+        return ''
+    if parsed.hostname == 'youtu.be':
+        ident = parsed.path.strip('/')
+    elif parsed.hostname in ('youtube.com', 'www.youtube.com') and parsed.path == '/watch':
+        ident = parse_qs(parsed.query).get('v', [''])[0]
+    else:
+        return ''
+    return ident if re.fullmatch(r'[A-Za-z0-9_-]{11}', ident) else ''
+
+
+def official_episode(value):
+    parsed = urlsplit(value)
+    if parsed.scheme != 'https':
+        return False
+    pattern = EXTERNAL_EPISODES.get(parsed.hostname)
+    return bool(youtube_id(value) or (pattern and re.match(pattern, parsed.path)))
+
+
+def open_license(value):
+    parsed = urlsplit(str(value or ''))
+    return parsed.hostname in ('creativecommons.org', 'www.creativecommons.org') and bool(
+        re.match(r'^/(?:licenses/by(?:-sa|-nc|-nc-sa|-nd|-nc-nd)?/[0-9.]+|publicdomain/(?:zero|mark)/[0-9.]+)/?$', parsed.path)
+    )
+
+
+def probe_file(value, *, browser=True):
+    conn, response, final = network.open_url(value, headers={'Range': 'bytes=0-1023'})
+    try:
+        content_type = response.getheader('Content-Type', '').split(';')[0].lower()
+        header = response.read(1024)
+        if not header or content_type in ('text/html', 'application/json'):
+            raise network.SourceError('The host returned a page instead of a media file.')
+        ext = '.' + urlsplit(final).path.rsplit('.', 1)[-1].lower()
+        expected = BROWSER_VIDEO.get(ext)
+        valid_signature = header.startswith((b'\x1aE\xdf\xa3', b'OggS', b'ID3')) or b'ftyp' in header[:32]
+        if browser and not (content_type in BROWSER_VIDEO.values() or (expected and valid_signature)):
+            raise network.SourceError('The source file uses a format the browser cannot play.')
+        if not browser and not (content_type.startswith(('video/', 'audio/')) or valid_signature):
+            raise network.SourceError('The host did not provide a downloadable media file.')
+        total = response.getheader('Content-Range', '').rsplit('/', 1)[-1]
+        if not total.isdigit() and response.status == 200:
+            total = response.getheader('Content-Length', '')
+        return {'url': final, 'mime': expected or content_type, 'size': int(total) if total.isdigit() else None}
+    finally:
+        conn.close()
+
+
+def episode_number(title):
+    match = re.search(r'\b(?:episode|ep\.?|e)\s*(\d+(?:\.\d+)?)\b', title, re.I)
+    return match[1] if match else None
+
+
+def episode_row(value, title, source, **extra):
+    return {'url': value, 'title': title, 'source': source, 'number': episode_number(title), **extra}
+
+
+class Viewing:
+    def __init__(self, app):
+        self.app = app
+        self.tickets = {}
+
+    def ticket(self, kind, value):
+        now = time.monotonic()
+        for key, entry in list(self.tickets.items()):
+            if entry[0] < now:
+                self.tickets.pop(key, None)
+        key = secrets.token_urlsafe(24)
+        self.tickets[key] = (now + 7200, kind, value)
+        return key
+
+    def get_ticket(self, key, kind):
+        entry = self.tickets.get(key)
+        if not entry or entry[0] < time.monotonic() or entry[1] != kind:
+            raise ValueError('This viewing option expired. Open the video again.')
+        return entry[2]
+
+    def search(self, body):
+        anime = body.get('mode') == 'anime'
+        selected = body.get('sources')
+        category = body.get('category') or ''
+        active = self.app.store.sources(public=True)
+        ids = [
+            s['id'] for s in active if s.get('enabled')
+            and (selected is None or s['id'] in selected)
+            and (not anime or set(s.get('categories', [])) & {'anime', 'animation'})
+            and (not category or category in s.get('categories', []))
+            and (anime or s['role'] in ('media', 'hybrid'))
+        ]
+        mode = 'search' if anime else 'media'
+        output = self.app.search.run(body.get('query', ''), ids, body.get('page', 1), mode)
+        by_id = {s['id']: s for s in active}
+        rows = []
+        for item in output['results']:
+            source = by_id.get(item['source_id'], {})
+            if source.get('role') == 'metadata':
+                item['status'] = 'Title identification'
+                item['is_video'] = False
+            elif item.get('media_urls'):
+                item['is_video'] = True
+                item['status'] = 'Episode pages found' if item.get('video_type') == 'series' else 'Video page found'
+            else:
+                continue
+            if anime and item['category'] not in ('anime', 'animation') and source.get('role') == 'metadata':
+                continue
+            rows.append(item)
+        unique = {}
+        for item in rows:
+            key = item['url'] if item['is_video'] and item['url'] else item['id']
+            unique.setdefault(key, item)
+        output['results'] = sorted(unique.values(), key=lambda item: not item['is_video'])
+        output['notice'] = 'Select a result to see episodes and viewing options.'
+        return output
+
+    def episodes(self, item, follow=True):
+        source = self.app.store.source(item.get('source_id'))
+        if not source or not source.get('enabled'):
+            return []
+        kind = source['kind']
+        if kind in open_catalog.CATALOGS and item.get('source_record_id') == kind:
+            return [dict(e, source=source['name'], kind=kind) for e in open_catalog.episodes(kind)]
+        if kind == 'anilist':
+            rows = []
+            for episode in item.get('episode_links', []):
+                value = url(episode.get('url'))
+                if value and official_episode(value):
+                    rows.append(episode_row(value, episode.get('title') or 'Episode', episode.get('site') or 'Official provider', kind='official'))
+            return rows
+        if source['role'] not in ('media', 'hybrid') or not item.get('media_urls'):
+            return []
+        if kind == 'website' and follow:
+            from . import websites
+            found = websites.episodes(source, item['url'])
+            if found:
+                return [dict(e, source=source['name'], kind='website', website=source['id']) for e in found]
+        value = url(item.get('url')) or url(item['media_urls'][0])
+        if not value:
+            return []
+        return [episode_row(value, item['title'], source['name'], kind=kind, website=source['id'])]
+
+    def details(self, item):
+        rows = self.episodes(item)
+        errors = []
+        source = self.app.store.source(item.get('source_id'))
+        if not rows or (source and source['role'] == 'metadata'):
+            names = list(dict.fromkeys([item['title'], *(item.get('alternatives') or [])]))[:3]
+            keys = {open_catalog.title_key(t) for t in names}
+            active = [s for s in self.app.store.sources() if s['enabled'] and s['role'] in ('media', 'hybrid')]
+            # Reuse the source executor. Each provider gets a small title query budget.
+            def lookup(site):
+                matches = []
+                for title in names:
+                    found, _ = sources.search(site, title, 1)
+                    for result in found:
+                        candidates = {open_catalog.title_key(result['title']), *(open_catalog.title_key(x) for x in result['alternatives'])}
+                        if not keys & candidates:
+                            continue
+                        if item.get('year') and result.get('year') and abs(item['year'] - result['year']) > 2:
+                            continue
+                        matches.extend(self.episodes(result))
+                    if matches:
+                        break
+                return matches
+            pending = {self.app.search.pool.submit(lookup, site):site for site in active if site['kind'] != 'local'}
+            done, unfinished = concurrent.futures.wait(pending, timeout=21)
+            for task in done:
+                try:
+                    rows.extend(task.result())
+                except Exception as exc:
+                    errors.append({'source': pending[task]['name'], 'message': str(exc) if isinstance(exc, ValueError) else 'Source could not be reached.'})
+            for task in unfinished:
+                task.cancel()
+                errors.append({'source': pending[task]['name'], 'message': 'Lookup timed out.'})
+        unique = {}
+        for episode in rows:
+            value = url(episode['url'])
+            if value and value not in unique:
+                unique[value] = dict(episode, url=value, ticket=self.ticket('episode', episode))
+        return {'episodes': list(unique.values()), 'errors': errors}
+
+    def play(self, key):
+        episode = self.get_ticket(key, 'episode')
+        value = episode['url']
+        base = {'episode': episode['title'], 'source': episode['source'], 'original': value, 'playback': 'external', 'formats': []}
+        ident = youtube_id(value)
+        if ident:
+            try:
+                data = network.json_request('https://www.youtube.com/oembed?' + urlencode({'url': value, 'format': 'json'}))
+                if data.get('type') == 'video' and data.get('title'):
+                    return dict(base, playback='embed', embed='https://www.youtube.com/embed/' + ident,
+                                message='Official YouTube player. If your region or browser blocks playback, open the exact episode on YouTube.')
+            except (OSError, ValueError):
+                pass
+            return dict(base, message='Open this exact episode in its official player. Embedded playback could not be checked here.')
+        if episode['kind'] == 'official':
+            return dict(base, message='Open the exact episode in the provider’s player. Availability depends on your location and account.')
+        try:
+            return self.play_media(episode, base)
+        except (OSError, ValueError) as exc:
+            return dict(base, message=str(exc) if isinstance(exc, ValueError) else 'The video host is unavailable. Try its original page.')
+
+    def play_media(self, episode, base):
+        value = episode['url']
+        source = self.app.store.source(episode.get('website')) if episode.get('website') else None
+        if episode['kind'] == 'peertube':
+            info = self.peertube(value)
+        elif episode['kind'] == 'website' and source:
+            from . import websites
+            info = websites.resolve(source, value)
+        elif urlsplit(value).hostname in ('archive.org', 'www.archive.org', 'commons.wikimedia.org'):
+            info = media.analyze(value, self.app.proxy)
+            info['download_allowed'] = open_license(info.get('license'))
+        else:
+            info = {'formats': [], 'download_allowed': False}
+        formats = [f for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('url')]
+        playable = sorted(
+            [f for f in formats if f.get('video') and '.' + f.get('ext', '') in BROWSER_VIDEO],
+            key=lambda f: (f.get('ext') == 'ogv', abs((f.get('height') or 480) - 360)),
+        )
+        output = dict(base, license=info.get('license', ''), attribution=', '.join(info.get('creators') or []))
+        last_error = ''
+        for selected in playable[:4]:
+            try:
+                checked = probe_file(selected['url'])
+                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.')
+                break
+            except (OSError, ValueError) as exc:
+                last_error = str(exc)
+        if output['playback'] == 'external' and info.get('embed'):
+            output.update(playback='embed', embed=info['embed'], message='The source provides an official player. Open the source page if it cannot play here.')
+        if output['playback'] == 'external':
+            output['message'] = last_error or 'This exact video page is available in its source player.'
+        if info.get('download_allowed') and formats:
+            analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=formats, analyzed=time.time())
+            safe = self.app.register_analysis(analysis)
+            output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])
+        return output
+
+    def peertube(self, value):
+        p = urlsplit(value)
+        ident = unquote(p.path.rstrip('/').split('/')[-1])
+        if p.scheme != 'https' or not re.fullmatch(r'[\w-]{8,64}', ident):
+            raise ValueError('This PeerTube result does not contain an exact video ID.')
+        base = 'https://' + p.netloc
+        item = network.json_request(base + '/api/v1/videos/' + quote(ident))
+        if not item.get('uuid') or item.get('privacy', {}).get('id') not in (1, 2) or item.get('isLive'):
+            raise ValueError('The instance did not expose a public recorded video.')
+        files = []
+        for f in item.get('files', []):
+            value = url(f.get('fileUrl'))
+            ext = urlsplit(value).path.rsplit('.', 1)[-1].lower()
+            if ext in media.EXTENSIONS:
+                files.append(dict(id=str(len(files)), url=value, ext=ext, height=f.get('resolution', {}).get('id'),
+                                  size=f.get('size'), video=bool(f.get('resolution', {}).get('id')),
+                                  audio=True, method='direct', label='PeerTube file'))
+        embed = item.get('embedPath') or ''
+        return dict(title=item.get('name'), formats=files, download_allowed=item.get('downloadEnabled') is True,
+                    license=(item.get('licence') or {}).get('label', ''), embed=base+embed if re.fullmatch(r'/videos/embed/[\w-]+', embed) else '')

@@ -5,6 +5,7 @@ import json
 import select
 import socket
 import ssl
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
@@ -16,6 +17,35 @@ class SourceError(ValueError):
 
 class UnsafeURL(SourceError):
     pass
+
+
+class TrustError(SourceError):
+    def __init__(self, error):
+        self.code = getattr(error, 'verify_code', None)
+        reason = 'The server certificate could not be verified'
+        if self.code in (18, 19, 20, 21):
+            reason = 'The certificate chain is not trusted on this PC'
+        super().__init__(reason + '. Check the Windows date and try the source in Edge. '
+                         'If a managed proxy or antivirus inspects HTTPS, ask its administrator to check its trusted issuer.')
+
+
+def tls_context():
+    if sys.platform == 'win32':
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return ssl.create_default_context()
+
+
+def tls_diagnostics(value):
+    try:
+        conn, _, _ = open_url(value, method='HEAD')
+        conn.close()
+        return {'status': 'Verified HTTPS request', 'verify_code': None}
+    except TrustError as error:
+        return {'status': 'Certificate rejected', 'verify_code': error.code, 'message': str(error)}
+    except (OSError, ValueError) as error:
+        return {'status': 'Connection failed', 'message': str(error) if isinstance(error, ValueError) else 'The host did not complete a request.'}
+
 
 
 def target(url):
@@ -39,13 +69,16 @@ def target(url):
 
 class PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, host, port, ip, timeout):
-        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        super().__init__(host, port, timeout=timeout, context=tls_context())
         self.ip = ip
 
     def connect(self):
         sock = socket.create_connection((self.ip, self.port), self.timeout)
         try:
             self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        except ssl.SSLCertVerificationError as error:
+            sock.close()
+            raise TrustError(error) from error
         except BaseException:
             sock.close()
             raise
@@ -53,16 +86,17 @@ class PinnedHTTPS(http.client.HTTPSConnection):
 
 def open_url(url, method='GET', data=None, headers=None, timeout=12):
     extra = dict(headers or {})
-    original_host = urlsplit(url).hostname
+    original = urlsplit(url)
+    original_origin = (original.scheme, original.hostname, original.port or (443 if original.scheme == 'https' else 80))
     for _ in range(6):
         p, host, port, ip = target(url)
-        if host != original_host:
+        if (p.scheme, host, port) != original_origin:
             # Custom API-key header names must not leak to a redirect recipient.
             extra = {k: v for k, v in extra.items() if k.lower() in ('range', 'if-range', 'accept', 'content-type')}
         conn = PinnedHTTPS(host, port, ip, timeout) if p.scheme == 'https' else http.client.HTTPConnection(ip, port, timeout=timeout)
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,
-                         {'Host': p.netloc, 'User-Agent': 'SceneTrace/2.0 (desktop video discovery)', 'Accept-Encoding': 'identity', **extra})
+                         {'Host': p.netloc, 'User-Agent': 'SceneTrace/3.0 (desktop video discovery)', 'Accept-Encoding': 'identity', **extra})
             r = conn.getresponse()
             if r.status in (301, 302, 303, 307, 308):
                 location = r.getheader('Location')

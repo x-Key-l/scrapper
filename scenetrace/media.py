@@ -28,11 +28,14 @@ def ffmpeg_path():
 
 
 def worker(request):
+    if sys.platform == 'win32':
+        import truststore
+        truststore.inject_into_ssl()
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
                 cachedir=False, age_limit=0, plugin_dirs=[], js_runtimes={},
-                remote_components=set(), playlistend=1, allowed_extractors=['default'],
+                remote_components=set(), compat_opts={'no-certifi'}, playlistend=1, allowed_extractors=['default'],
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True)
     if request.get('download'):
         def hook(data):
@@ -98,7 +101,7 @@ def analyze(value, proxy):
                                     label=name, url='https://archive.org/download/'+quote(ident)+'/'+quote(name, safe=''), method='direct'))
         info = dict(title=text(meta.get('title')), description=text(meta.get('description')), creators=[text(meta.get('creator'))],
                     thumbnail='https://archive.org/services/img/'+quote(ident), license=text(meta.get('licenseurl')), formats=formats)
-    elif p.hostname == 'commons.wikimedia.org' and p.path.startswith('/wiki/File:'):
+    elif p.hostname == 'commons.wikimedia.org' and unquote(p.path).startswith('/wiki/File:'):
         title = unquote(p.path.removeprefix('/wiki/'))
         raw = network.json_request('https://commons.wikimedia.org/w/api.php?'+urlencode({'action':'query','format':'json','titles':title,'prop':'videoinfo','viprop':'url|size|extmetadata|derivatives','viurlwidth':640}))
         page = next(iter(raw.get('query',{}).get('pages',{}).values()), {})
