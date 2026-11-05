@@ -14,17 +14,6 @@ from scenetrace.search import deduplicate
 out = Path('artifacts/v4-live')
 out.mkdir(parents=True, exist_ok=True)
 report = {'website_tests': [], 'deep_catalog_tests': []}
-report['api_diagnostics'] = []
-for endpoint in (
-    'https://itunes.apple.com/search?term=Jackie%20Chan&media=movie&entity=movie&country=US&limit=5',
-    'https://www.wikidata.org/w/api.php?action=wbsearchentities&search=Jackie%20Chan&language=en&type=item&limit=3&format=json',
-    'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=white%20hair%20teacher%20eye%20anime&format=json',
-):
-    try:
-        raw = network.json_request(endpoint)
-        report['api_diagnostics'].append({'url':endpoint, 'response':str(raw)[:3000]})
-    except Exception as error:
-        report['api_diagnostics'].append({'url':endpoint, 'error':str(error)})
 corpus = []
 with tempfile.TemporaryDirectory() as folder:
     app = App(folder, None)
@@ -52,7 +41,7 @@ with tempfile.TemporaryDirectory() as folder:
         for kind, query, hints in [
             ('anilist','Anime with a white-haired teacher who covers one eye',{}),
             ('anilist','An anime where a boy has a powerful creature sealed inside him',{'category':'anime','genre':'Action'}),
-            ('itunes','An old action movie with Jackie Chan where he fights criminals in a city',{}),
+            ('encyclopedia','An old action movie with Jackie Chan where he fights criminals in a city',{}),
             ('tvmaze','Nartuo',{}),
         ]:
             check = {'source':kind, 'query':query}

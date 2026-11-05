@@ -14,7 +14,8 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   for(let n=0;n<200;n++){try{address=JSON.parse(await fs.readFile(path.join(folder,'instance.json'),'utf8')).url;if((await fetch(address+'/health')).ok)break;}catch{}await sleep(100);}
   const start=performance.now();
   browser=await chromium.launch({channel:'msedge',headless:false});
-  const page=await browser.newPage({viewport:{width:1260,height:840}});
+  const context=await browser.newContext({viewport:{width:1260,height:840}});
+  const page=await context.newPage();
   await page.goto(address);
   await page.locator('#nav button').first().waitFor();
   const ready=(performance.now()-start)/1000;
@@ -27,18 +28,18 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
    measurements.push({stage,...memory,cpu_seconds:info.processInfo.reduce((n,p)=>n+p.cpuTime,0),browser_process_count:ids.length});
   }
   await measure('App only');
-  const site=await browser.newPage();
+  const site=await context.newPage();
   await site.goto('https://www.w3schools.com/html/html5_video.asp',{waitUntil:'domcontentloaded'});
   await site.locator('video').first().waitFor();
   await site.locator('video').first().evaluate(v=>{v.muted=true;return v.play()});
   await site.waitForFunction(()=>document.querySelector('video').currentTime>1);
   await measure('One website tab playing W3Schools video');
   const extras=[];
-  for(let i=0;i<4;i++)extras.push(await browser.newPage());
+  for(let i=0;i<4;i++)extras.push(await context.newPage());
   await measure('Five website tabs; four blank');
   for(const p of extras)await p.close();
   await measure('After closing extra tabs');
-  const result={scope:'Original v3 backend in a fresh installed Edge instance on Windows CI. Browser memory excludes Python. Third-party page activity and runner load vary. Four extra tabs are blank, not simulated active websites.',edge_version:browser.version(),browser_app_ready_seconds:ready,measurements};
+  const result={scope:'Original v3 backend in a fresh installed Edge instance on Windows CI. Browser memory excludes Python. Third-party page activity and runner load vary. One shared browser context; four extra tabs are blank, not simulated active websites. Live advertising subframes can affect memory.',edge_version:browser.version(),browser_app_ready_seconds:ready,measurements};
   await fs.mkdir('artifacts/performance',{recursive:true});
   await fs.writeFile('artifacts/performance/v3-edge.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
  }finally{

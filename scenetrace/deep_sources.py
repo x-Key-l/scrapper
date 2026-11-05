@@ -30,25 +30,6 @@ def character_record(value):
     return dict(name=(value.get('name') or {}).get('full') or '', description=value.get('description') or '', url=value.get('siteUrl') or '')
 
 
-def apple_movies(source, query, attribute=None):
-    params = dict(term=query, country='US', entity='movie', media='movie', limit=60, explicit='No')
-    if attribute:
-        params['attribute'] = attribute
-    raw = network.json_request(source['endpoint'].rstrip('/') + '/search?' + urlencode(params))
-    output = []
-    for value in raw.get('results', []):
-        if not value.get('trackId'):
-            continue
-        evidence = ['Apple actor catalog match: ' + query] if attribute == 'actorTerm' else []
-        output.append(record(source['id'], value['trackId'], value.get('trackName'), category='movie',
-                             description=value.get('longDescription') or value.get('shortDescription'),
-                             year=value.get('releaseDate'), genres=[value['primaryGenreName']] if value.get('primaryGenreName') else [],
-                             creators=[value['artistName']] if value.get('artistName') else [],
-                             url=value.get('trackViewUrl'), source_name=source['name'], retrieval_evidence=evidence))
-    # Promotional previews/artwork are not reclassified as full playable movies.
-    return output
-
-
 def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
     """Return provider candidates and per-operation evidence; at most three calls/provider."""
     kind = source['kind']
@@ -100,28 +81,15 @@ def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
         data = raw.get('Page') or {} if isinstance(raw, dict) else {}
         return [anime_record(source, value) for value in data.get('media', [])], bool(data.get('pageInfo', {}).get('hasNextPage'))
 
-    if kind == 'itunes' and (analysis.get('actor') or not analysis.get('title_like')):
-        if page > 1:
-            return [], False
-        actor = analysis.get('actor')
-        if actor:
-            rows = cached(['actor', actor], lambda: apple_movies(source, actor, 'actorTerm'))
-            if not rows:
-                rows = cached(['actor-all-fields', actor], lambda: apple_movies(source, actor))
-                for row in rows:
-                    row['retrieval_evidence'] = ['Apple catalog name search: '+actor+'; a search match is not a verified cast credit']
-            return rows, False
-        distinctive = [t for t in analysis['terms'] if len(t) > 4 and not t.isdigit()][:2]
-        output = []
-        for term in distinctive:
-            if cancelled():
-                break
-            output.extend(cached(['description', term], lambda t=term: apple_movies(source, t, 'descriptionTerm')))
-        return output, False
+    if kind == 'encyclopedia':
+        from .encyclopedia import search as search_encyclopedia, WIKI
+        def request(params, base=WIKI):
+            return cached(['wiki', base, params], lambda: network.json_request(base+'?'+urlencode(params)), 86400)
+        return search_encyclopedia(source, query, analysis, page, request)
 
     if kind == 'tmdb' and analysis.get('actor'):
         if not source.get('token'):
-            raise ValueError('Connect the optional TMDB token for filmography search, or use Apple’s movie catalog.')
+            raise ValueError('Connect the optional TMDB token for filmography search, or enable Wikipedia + Wikidata.')
         headers = {'Authorization': 'Bearer ' + source['token']}
         actor = analysis['actor']
         people = cached(['person', actor], lambda: network.json_request(endpoint+'/search/person?'+urlencode({'query': actor}), headers=headers))

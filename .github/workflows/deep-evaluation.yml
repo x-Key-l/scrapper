@@ -2,7 +2,7 @@ name: Deep Search live evaluation and baseline comparison
 on:
   push:
     branches: ['build/intelligent-browser-v4']
-    paths: ['scenetrace/deep*', 'scripts/evaluate_deep.py', '.github/workflows/deep-evaluation.yml']
+    paths: ['scenetrace/deep*', 'scenetrace/encyclopedia.py', 'scripts/evaluate_deep.py', '.github/workflows/deep-evaluation.yml']
   workflow_dispatch:
 permissions:
   contents: read

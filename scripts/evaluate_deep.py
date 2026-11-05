@@ -18,10 +18,10 @@ CASES = [
     ('Japanese title', '進撃の巨人', {}, ['Attack on Titan', 'Shingeki no Kyojin'], ['anilist','tvmaze']),
     ('incomplete title', 'Fullmetal Alchem', {}, ['Fullmetal Alchemist: Brotherhood','Fullmetal Alchemist'], ['anilist','tvmaze']),
     ('named character', 'Kakashi Hatake', {'category':'anime','character':'Kakashi Hatake'}, ['Naruto','Naruto: Shippuden'], ['anilist']),
-    ('character appearance', 'Anime with a white-haired teacher who covers one eye', {}, ['Naruto','Naruto: Shippuden'], ['anilist']),
-    ('actor and setting', 'An old action movie with Jackie Chan where he fights criminals in a city', {}, ['Police Story','Rush Hour','Rumble in the Bronx','Police Story 2'], ['itunes']),
+    ('character appearance', 'Anime with a white-haired teacher who covers one eye', {}, ['Naruto','Naruto: Shippuden'], ['anilist','encyclopedia']),
+    ('actor and setting', 'An old action movie with Jackie Chan where he fights criminals in a city', {}, ['Police Story','Rush Hour','Rumble in the Bronx','Police Story 2'], ['encyclopedia']),
     ('partial plot', 'Anime about a student with a notebook that kills people whose names he writes', {}, ['Death Note'], ['anilist']),
-    ('ambiguous scene', 'A movie where people discover an underground cave and encounter dangerous creatures', {}, ['The Descent','The Cave'], ['itunes']),
+    ('ambiguous scene', 'A movie where people discover an underground cave and encounter dangerous creatures', {}, ['The Descent','The Cave'], ['encyclopedia']),
     ('incorrect period', 'Anime where a boy trains as a ninja with a demon sealed inside him from the 1980s', {}, ['Naruto','Naruto: Shippuden'], ['anilist']),
     ('combined clues', 'Animated show about brothers who use alchemy after trying to restore their mother', {}, ['Fullmetal Alchemist: Brotherhood','Fullmetal Alchemist'], ['anilist']),
 ]

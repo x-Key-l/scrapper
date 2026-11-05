@@ -12,9 +12,9 @@ from . import network
 from .model import record, text, field, flatten, url
 
 GALLERY = [
-    dict(id='itunes', name='Apple movie catalog', kind='itunes', role='metadata', categories=['movie'],
-         description='Movie titles, descriptions and actor-search matches from Apple’s public catalog. Store listings are metadata, not included films.',
-         website='https://tv.apple.com', docs='https://performance-partners.apple.com/search-api', endpoint='https://itunes.apple.com', auth='None'),
+    dict(id='encyclopedia', name='Wikipedia + Wikidata', kind='encyclopedia', role='metadata', categories=['movie', 'series', 'anime', 'documentary'],
+         description='Public full-text articles, character relationships and stated cast credits. Articles are identification evidence, not viewing pages.',
+         website='https://en.wikipedia.org', docs='https://www.mediawiki.org/wiki/API:Search', endpoint='https://en.wikipedia.org/w/api.php', auth='None'),
     dict(id='pokemon-tv', name='Pokémon TV', kind='pokemon-tv', role='media', categories=['anime'],
          description='Official English Indigo League episode pages. Starter selection of episodes 1–3.',
          website='https://www.youtube.com/@OfficialPokemonTV', endpoint='https://www.youtube.com', auth='None'),
@@ -46,11 +46,11 @@ def defaults(store):
     existing = {s['id'] for s in store.sources()}
     initialized = store.setting('gallery_initialized', False)
     video_initialized = store.setting('video_gallery_initialized', False)
-    deep_initialized = store.setting('deep_gallery_initialized', False)
+    deep_initialized = store.setting('encyclopedia_gallery_initialized', False)
     for source in GALLERY:
         fresh = not initialized or (
             not video_initialized and source['kind'] in ('pokemon-tv', 'open-animation')
-        ) or (not deep_initialized and source['kind'] == 'itunes'
+        ) or (not deep_initialized and source['kind'] == 'encyclopedia'
         )
         if fresh and source['id'] not in existing:
             health = 'Optional key needed' if source['id'] == 'tmdb' else 'Untested'
@@ -60,7 +60,7 @@ def defaults(store):
     if not video_initialized:
         store.set_setting('video_gallery_initialized', True)
     if not deep_initialized:
-        store.set_setting('deep_gallery_initialized', True)
+        store.set_setting('encyclopedia_gallery_initialized', True)
 
 
 def validate(config, previous=None):
@@ -202,7 +202,7 @@ def paced(source, operation):
     with _lock_guard:
         lock = _locks.setdefault(source['id'], threading.Lock())
     with lock:
-        interval = {'anilist': 2.1, 'itunes': 3.1}.get(source['kind'], .6)
+        interval = {'anilist': 2.1, 'encyclopedia': .6}.get(source['kind'], .6)
         delay = interval - (time.monotonic() - _last_request.get(source['id'], 0))
         if delay > 0:
             time.sleep(delay)
@@ -225,9 +225,10 @@ def _search(s, q, page, memory=None):
     if kind in ('pokemon-tv', 'open-animation'):
         from .open_catalog import search as search_open_catalog
         return search_open_catalog(s, q, page)
-    if kind == 'itunes':
-        from .deep_sources import apple_movies
-        return apple_movies(s, q), False
+    if kind == 'encyclopedia':
+        from .encyclopedia import search as search_encyclopedia
+        from .deep import understand
+        return search_encyclopedia(s, q, understand(q), page)
     if kind == 'tvmaze':
         if page > 1:
             return [], False

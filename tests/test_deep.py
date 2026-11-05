@@ -8,6 +8,28 @@ from scenetrace.sessions import SearchSessions
 from scenetrace.store import Store
 
 
+def test_exact_title_is_not_confused_with_numbered_films():
+    rows = [record('a', 2, 'Naruto the Movie 2', alternatives=['Naruto Movie 2']), record('a', 1, 'Naruto')]
+    assert rank('Naruto', rows)[0]['title'] == 'Naruto'
+
+
+def test_encyclopedia_requires_actual_cast_credit():
+    from scenetrace.encyclopedia import search
+    def response(params, base=None):
+        if params['action'] == 'wbsearchentities':
+            return {'search':[{'id':'Q1','description':'Actor'}]}
+        if params['action'] == 'query':
+            return {'query':{'pages':{'2':{'title':'Example Film', 'extract':'An action story.', 'pageprops':{'wikibase_item':'Q2'}},
+                                      '3':{'title':'Mention Only', 'pageprops':{'wikibase_item':'Q3'}}}}}
+        return {'entities':{'Q2':{'labels':{'en':{'value':'Example Film'}}, 'descriptions':{'en':{'value':'1985 film'}},
+                                  'claims':{'P161':[{'mainsnak':{'datavalue':{'value':{'id':'Q1'}}}}]}},
+                            'Q3':{'labels':{'en':{'value':'Mention Only'}}, 'descriptions':{'en':{'value':'1985 film'}}}}}
+    rows, _ = search({'id':'encyclopedia','name':'Wikipedia + Wikidata'}, 'An action movie with Jane Actor',
+                     {'actor':'Jane Actor'}, request=response)
+    assert len(rows) == 1 and rows[0]['cast'][0]['name'] == 'Jane Actor'
+    assert rows[0]['media_urls'] == [] and rows[0]['status'] == 'Metadata only'
+
+
 def test_fuzzy_alternative_and_character_evidence():
     naruto = record('catalog', 1, 'Naruto', category='anime', year=2002, alternatives=['NARUTO'],
                     characters=[{'name':'Kakashi Hatake', 'description':'A white-haired teacher who covers his left eye.'}],

@@ -318,7 +318,9 @@ class Viewing:
         except (OSError, ValueError) as error:
             message = str(error) if isinstance(error, ValueError) else 'The website did not complete the request.'
             checks['error'] = message
-            return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': message,
+            # A later episode/player outage must not erase a verified search method.
+            searchable = any(row.get('media_urls') for row in rows)
+            return {'ok': searchable, 'checks': checks, 'results': rows[:6], 'message': message,
                     'error_code': getattr(error, 'code', 'connection_error'),
                     'diagnostics': getattr(error, 'diagnostics', {})}
 

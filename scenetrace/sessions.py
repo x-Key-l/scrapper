@@ -16,6 +16,7 @@ class SearchSessions:
         self.app = app
         self.lock = threading.RLock()
         self.items = {}
+        self.tasks = set()
         self.workers = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix='search-session')
 
     def start(self, body):
@@ -31,12 +32,12 @@ class SearchSessions:
         with self.lock:
             now = time.monotonic()
             self.items = {k:v for k,v in self.items.items() if now-v['touched'] < 600 or v['status'] == 'running'}
-            running = [v for v in self.items.values() if v['status'] == 'running']
-            if len(running) >= 2:
+            self.tasks = {task for task in self.tasks if not task.done()}
+            if len(self.tasks) >= 2:
                 raise ValueError('Two searches are already running. Cancel one or wait for its results.')
             ident = uuid.uuid4().hex
             self.items[ident] = dict(id=ident, status='running', results=[], sources=[], stage='Starting search', touched=now)
-        self.workers.submit(self.run, ident, dict(body, query=query.strip(), hints=hints))
+            self.tasks.add(self.workers.submit(self.run, ident, dict(body, query=query.strip(), hints=hints)))
         return {'id': ident}
 
     def update(self, ident, value):
