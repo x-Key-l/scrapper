@@ -1,9 +1,11 @@
-# SceneTrace 3.0 Windows release candidate
+# SceneTrace 4.0 · Windows release candidate
 
-Download **SceneTrace-Windows-x64.zip**, extract the complete archive and double-click **SceneTrace.exe**. Keep **_internal** with the executable.
+Download **SceneTrace-Windows-x64.zip**, choose **Extract All**, and double-click **SceneTrace.exe** inside the extracted folder. Keep all companion files together. No Python, Node, Git or Docker is needed. Integrated tabs use the installed Microsoft WebView2 runtime; a default-browser fallback is available if it is missing.
 
-This release adds dedicated Anime and Universal Video Search views, exact source and episode pages, in-app playback, an Add Video Website wizard, checked download options, and native Windows certificate validation. Existing local profiles carry forward. Pokémon TV provides official episode handoffs, and the Caminandes series provides direct Commons playback and eligible downloads.
+This release adds a native tabbed video browser, progressive Quick and Deep Search, fuzzy and alternative title matching, character/cast evidence, public full-text retrieval, and complete search-history management. Existing saved items, sources and settings carry forward.
 
-Release checks run functional tests, actual public source requests, browser playback, a real user-added HTML source and a complete episode download through the packaged Windows executable. See the attached screenshots and the reports inside the ZIP.
+The HiAnime Naruto regression is fixed: public search returns real title links, and the series page exposes 220 ordered episode links. Its third-party playback and downloads remain unverified. Caminandes provides verified in-app playback and a completed licensed download. Pokémon TV provides exact official episode handoffs. A user-added W3Schools source was searched and played through the real Windows package.
 
-For compatible websites, use the setup wizard. Protected streams, arbitrary HLS/DASH extraction and unverified site connectors remain outside the supported scope. See README.md and docs/HELP.md.
+Windows verification exercises actual WebView2 navigation, lazy tabs, bookmarks, isolation from local APIs, renderer-crash recovery, video frames and restart persistence. Source tests and browser workflows must pass before publication. Reports, measured performance and limitations are in **docs/V4-AUDIT.md** and the JSON reports inside the ZIP. Screenshots and a SHA-256 checksum are attached.
+
+This is a release candidate. Live websites can change, regional restrictions apply, and owner-side testing on modest hardware is still needed. No DRM, authentication, paywall or anti-bot bypass is included. Download availability depends on an eligible source path. Deep Search identifies plausible candidates from available evidence; it does not guarantee scene recognition or universal site compatibility.

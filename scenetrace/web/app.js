@@ -8,7 +8,7 @@ const bytes=n=>n==null?'Unknown size':n<1048576?(n/1024).toFixed(0)+' KB':n<1073
 const icons={home:'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',search:'M21 21l-6-6M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',memory:'M9 18h6M10 22h4M8 15a7 7 0 1 1 8 0l-1 3H9Z',hub:'M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h6v6h-6Z',link:'M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-3 3M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l3-3',downloads:'M12 3v12m-5-5 5 5 5-5M3 16v5h18v-5',saved:'M5 3h14v19l-7-5-7 5Z',settings:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M9 2h6l1 4 4 1 2 5-3 3v5l-5 2-3-3-4 1-4-4 1-4-3-3 2-5 4-1Z'};
 const navs=[['home','Home'],['browser','Browser'],['search','Quick Search'],['memory','Deep Search'],['anime','Anime'],['websites','Video Sources'],['link','Link Analyzer'],['downloads','Downloads'],['saved','Saved Library'],['history','History'],['settings','Settings']];
 const state={view:'home',data:null,results:[],analysis:null,query:'',mode:'search',page:1,statuses:[],notice:'',hasMore:false,hints:{},sourceIds:null,requestId:null,busy:false,filter:'all',upload:null,editor:null,editorFields:[]};
-let toastTimer;
+let toastTimer,lastBackgroundRefresh=0;
 let reloadSequence=0,reloadApplied=0;
 function toast(message,error=false){$('toast').textContent=message;$('toast').className=error?'error':'';$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,error?9000:4200)}
 async function api(path,body={}){const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-SceneTrace':'local'},body:JSON.stringify(body)});let d;try{d=await r.json()}catch{throw Error('SceneTrace stopped responding. Reopen the application.')}if(!r.ok)throw Error(d.detail||'The operation could not finish.');return d}
@@ -48,10 +48,10 @@ function showImport(d){state.upload=d;$('import-preview').innerHTML='<h3>'+esc(d
 function findSources(){dialog('Find More Sources','<p class="muted">Describe the collection you need. We’ll suggest documented connectors and, if configured, search for additional database providers.</p><form data-form="discover" class="searchbar"><input name="query" aria-label="Describe the database you need" placeholder="Obscure science fiction films from the 1980s…" required minlength="2"><button class="primary">Find sources</button></form><div id="discovered"></div>')}
 function guide(welcome=false){
     dialog(welcome?'Welcome to SceneTrace':'How to find and watch videos',
-        '<div class="guide"><ol><li>Open Anime and search for Pokémon or another title. Choose a result to see its episode pages.</li>'+
-        '<li>Open Universal Video Search to search your connected websites. Try Caminandes for a directly playable animated episode.</li>'+
+        '<div class="guide"><ol><li>Use Browser to open websites in tabs. The address bar menu connects the current site to SceneTrace search. Open Anime and search Pocket Monsters for official episode pages.</li>'+
+        '<li>Open Quick Search to search your connected websites. Try Caminandes for a directly playable animated episode.</li>'+
         '<li>Use Add Video Website in Video Sources to inspect, test and save a public website.</li>'+
-        '<li>Describe a scene in Memory Search. Open a title and choose Find video to look up viewing options.</li>'+
+        '<li>Open Deep Search for misspelled titles, characters, actors or remembered scenes. Refine the clues and inspect viewing matches.</li>'+
         '<li>When an episode offers a download, choose its format and destination. Track the transfer under Downloads.</li></ol>'+
         '<button class="primary" data-action="'+(welcome?'welcome-done':'close-dialog')+'">'+
         (welcome?'Start discovering →':'Close guide')+'</button></div>');
@@ -118,4 +118,4 @@ $('close-dialog').addEventListener('click',()=>$('dialog').close());$('help').ad
 $('quit').addEventListener('click',async()=>{if(!confirm('Quit SceneTrace? Unfinished downloads will pause.'))return;try{await api('shutdown');$('page').innerHTML=empty('SceneTrace has closed','You can close this tab. Double-click SceneTrace.exe to return.')}catch(e){toast(e.message,true)}});
 window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(v!==state.view)nav(v)});
 async function start(){try{await reload();nav(location.hash.slice(1)||'home');if(!state.data.settings.onboarded)guide(true)}catch(e){$('page').innerHTML='<div class="notice error">'+esc(e.message)+'</div>'}}
-setInterval(async()=>{if(!state.data||document.hidden)return;try{await reload(false);if(state.view==='downloads'||(state.view==='hub'&&Object.values(state.data.tasks).some(t=>t.status==='running')))renderPage();else if(state.view==='hub'){$('page').querySelectorAll('.notice').length&&renderPage()}}catch{}},2500);
+setInterval(async()=>{if(!state.data||document.hidden)return;const now=Date.now();if(state.view!=='downloads'&&state.view!=='hub'&&now-lastBackgroundRefresh<10000)return;lastBackgroundRefresh=now;try{await reload(false);if(state.view==='downloads'||(state.view==='hub'&&Object.values(state.data.tasks).some(t=>t.status==='running')))renderPage();else if(state.view==='hub'){$('page').querySelectorAll('.notice').length&&renderPage()}}catch{}},2500);

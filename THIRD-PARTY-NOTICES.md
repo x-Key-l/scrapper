@@ -12,3 +12,7 @@ Portable packages contain separate upstream runtime components. Their license te
 - Other providers: their data/media licenses and service terms apply. SceneTrace is not endorsed or certified by any provider.
 
 The UI uses system fonts, original CSS/SVG and provider-supplied artwork. No Anine executable, artwork or application code is redistributed.
+
+- Microsoft.Web.WebView2 SDK 1.0.3537.50: Microsoft WebView2 license, https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3537.50. SDK license/notices are copied from the restored NuGet package into licenses. The separately installed Evergreen Runtime retains Microsoft's runtime terms; SceneTrace does not redistribute a Chromium installation.
+- .NET Framework 4.8 is a Windows system runtime. The build-only Microsoft.NETFramework.ReferenceAssemblies package is not an end-user dependency.
+- Wikipedia article extracts: CC BY-SA 4.0, https://en.wikipedia.org/wiki/Wikipedia:Copyrights. Plain-text extracts preserve the article URL and attribution. Wikidata structured statements: CC0, https://www.wikidata.org/wiki/Wikidata:Licensing. These sources provide identification evidence, not media rights.

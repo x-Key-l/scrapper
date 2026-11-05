@@ -7,7 +7,7 @@ import re
 from urllib.parse import urlencode, quote
 from . import network
 from .deep import words
-from .model import record, text
+from .model import record
 
 WIKI = 'https://en.wikipedia.org/w/api.php'
 DATA = 'https://www.wikidata.org/w/api.php'
@@ -27,7 +27,12 @@ def label(entity):
 
 
 def search(source, query, analysis, page=1, request=None):
-    request = request or (lambda params, base=WIKI: network.json_request(base+'?'+urlencode(params)))
+    transport = request or (lambda params, base=WIKI: network.json_request(base+'?'+urlencode(params)))
+    def request(params, base=WIKI):
+        raw = transport(params, base)
+        if not isinstance(raw, dict) or raw.get('error'):
+            raise network.SourceError('The encyclopedia API could not complete this query. Retest the source or try again later.')
+        return raw
     actor = analysis.get('actor')
     actor_id = None
     if actor:
@@ -40,6 +45,8 @@ def search(source, query, analysis, page=1, request=None):
         if 'hair' not in vocabulary: vocabulary.append('hair')
     if actor:
         searches = ['"'+actor.replace('"', '')+'" film']
+        if set(analysis.get('expanded', [])) & {'crime', 'criminal', 'police'}:
+            searches.insert(0, '"'+actor.replace('"', '')+'" crime film')
     elif analysis.get('title_like') or analysis.get('character'):
         searches = [analysis.get('character') or query]
     else:
@@ -61,6 +68,17 @@ def search(source, query, analysis, page=1, request=None):
             for target in ids(entity, 'P1080')+ids(entity, 'P144')+ids(entity, 'P179'):
                 related.setdefault(target, []).append(ident)
     relations = request(dict(action='wbgetentities', ids='|'.join(related), props='labels|descriptions|aliases|claims', languages='en', format='json'), DATA).get('entities', {}) if related else {}
+    # A fictional universe and a television title are different entities. Follow
+    # an explicit "based on" statement when present; never rename it by guessing.
+    works = {}
+    for ident, entity in relations.items():
+        description = entity.get('descriptions', {}).get('en', {}).get('value', '').lower()
+        if 'universe' in description:
+            for target in ids(entity, 'P144'):
+                works.setdefault(target, []).extend(related[ident])
+    if works:
+        relations.update(request(dict(action='wbgetentities', ids='|'.join(works), props='labels|descriptions|aliases|claims', languages='en', format='json'), DATA).get('entities', {}))
+        related.update(works)
     output = []
 
     def make(ident, entity, article, characters=None):
@@ -70,7 +88,7 @@ def search(source, query, analysis, page=1, request=None):
         year = next((v.get('time', '')[1:5] for v in values(entity, 'P577') if isinstance(v, dict)), '')
         cast = [{'name':actor, 'url':'https://www.wikidata.org/wiki/'+actor_id}] if actor_id and actor_id in ids(entity, 'P161') else []
         return record(source['id'], ident, title, alternatives=[v['value'] for v in entity.get('aliases', {}).get('en', [])],
-                      description=description, year=year, category=analysis.get('category') or 'movie',
+                      description=description, year=year, category=analysis.get('category') or ('series' if 'series' in entity.get('descriptions', {}).get('en', {}).get('value', '') else 'movie'),
                       url=source_url, source_name=source['name'], external_ids={'wikidata':ident},
                       cast=cast, characters=characters or [], license='Wikipedia text: CC BY-SA 4.0; Wikidata: CC0',
                       retrieval_evidence=['Wikipedia article: '+article['title'], *(['Cast credit in Wikidata: '+actor] if cast else [])])
@@ -95,4 +113,4 @@ def search(source, query, analysis, page=1, request=None):
             row = make(ident, entity, article, [person])
             row['retrieval_evidence'].append('Wikidata links this character to '+label(entity))
             output.append(row)
-    return output, len(pages) == 10
+    return output, len(pages) >= 10

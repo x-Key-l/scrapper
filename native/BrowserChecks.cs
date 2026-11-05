@@ -133,6 +133,8 @@ namespace SceneTrace
                 await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelector('video').muted=true;document.querySelector('video').play()");
                 await WaitFor(tab, "document.querySelector('video').currentTime>1 && document.querySelector('video').videoWidth>0");
                 checks.Add("W3Schools website navigated and actual native WebView2 video frames advanced");
+                await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelector('video').scrollIntoView({block:'center'})");
+                await Task.Delay(500);
                 var shot = json.Deserialize<Dictionary<string, object>>(await tab.View.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", "{}"));
                 Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
                 File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(reportPath), "native-browser-playing.png"), Convert.FromBase64String((string)shot["data"]));

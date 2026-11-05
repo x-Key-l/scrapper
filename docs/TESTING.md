@@ -24,3 +24,13 @@ GitHub Actions must pass source tests on Ubuntu and Windows, source-process smok
 - Antivirus/SmartScreen behavior and performance on modest hardware.
 
 The first Windows package is a release candidate, not a claim of completed manual acceptance.
+
+## 4.0 browser, search and history gates
+
+- `python scripts/v4_live_check.py`: actual HiAnime Naruto and W3Schools capability checks, plus live catalog evidence. Public failures remain visible in the report.
+- `python scripts/windows_browser_check.py`: launch the real packaged native application twice, verify isolation, tabs/back/forward/find/reload, error and renderer-crash recovery, actual video frames, bookmarks and saved/history persistence.
+- `python scripts/evaluate_deep.py --baseline baseline/scenetrace/search.py`: eleven fixed queries with live empty-index retrieval and identical-corpus old/new ranking; baseline must be the pinned 3.0 revision. Top-five/top-ten metrics are not general accuracy claims.
+- `python scripts/v4_audit.py --root PATH --skip-website`: source backend readiness, RSS and local queries. `node scripts/browser_benchmark.cjs` measures a fresh installed Edge context for the v3 baseline. Native packaged measurements are recorded separately.
+- `tests/test_history.py` covers stable-ID migration, individual/bulk deletion, undo, retention, recording disabled and persistence. `tests/test_deep.py` covers exact/alternative/fuzzy titles, cast/character evidence, soft date clues, FTS recall and progressive cancellation.
+
+See V4-AUDIT.md for measured outcomes and precise limitations. A source's successful search does not establish its playback or download compatibility.

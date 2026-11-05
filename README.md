@@ -1,38 +1,47 @@
-# SceneTrace 3.0
+# SceneTrace 4.0
 
-Search video websites, select a title or episode, and watch through a direct file or the source's player. SceneTrace runs locally and opens in your default browser.
+Browse video websites in tabs, search connected sources, identify forgotten titles, and open real episode pages or supported players. Metadata catalogs provide identification evidence; viewing and download availability are checked separately.
 
 ## Install on Windows
 
-1. Open [GitHub Releases](https://github.com/x-Key-l/scrapper/releases) and download **SceneTrace-Windows-x64.zip** from the 3.0 release candidate.
-2. Right-click the ZIP and choose **Extract All**.
-3. Open the extracted SceneTrace folder and double-click **SceneTrace.exe**. Keep the included **_internal** folder beside it.
+1. Open [Releases](https://github.com/x-Key-l/scrapper/releases) and download **SceneTrace-Windows-x64.zip** from the latest **4.0 release candidate**.
+2. Right-click the ZIP → **Extract All**.
+3. Open the extracted **SceneTrace** folder and double-click **SceneTrace.exe**. Keep **all included files and folders together**.
 
-The portable Windows 10/11 x64 package includes its Python and FFmpeg runtime. The existing local profile at **%LOCALAPPDATA%\SceneTrace** continues to hold saved items, history, downloads and settings. Quit the old app before launching the upgrade. The [2.0 release candidate](https://github.com/x-Key-l/scrapper/releases/tag/v2.0.0-rc.13) remains available for comparison.
+Windows 10/11 x64. Python, Node, Git and Docker are not required. The package includes Python, yt-dlp and FFmpeg. The integrated browser uses Microsoft's installed **WebView2 Evergreen Runtime**. If it is missing, SceneTrace opens in your default browser; install Microsoft's [Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) to enable integrated tabs. No complete Chromium browser or AI model is bundled.
 
-## Find and watch a video
+Quit the old app before upgrading. Settings, saved items, sources, downloads and history remain in **%LOCALAPPDATA%\SceneTrace**. Extract each release into a new folder. [SceneTrace 3.0 RC29](https://github.com/x-Key-l/scrapper/releases/tag/v3.0.0-rc.29) remains available for rollback; back up your profile before reverting after using new features.
 
-- **Anime** accepts English, Japanese, Romaji and alternative title searches. Try **Pocket Monsters**, open **Pokémon: Indigo League**, and select one of the first three official Pokémon TV episodes. The exact episode link remains available alongside the official embed when the publisher exposes one.
-- **Universal Video Search** queries video websites. Try **Caminandes**, open its series result, and select **Episode 3 · Llamigos**. The app uses the actual Commons media file and provides playback controls and eligible formats.
-- **Memory Search** uses plot, character, setting and date clues. Open a match and choose **Find Video** to look up viewing options from connected websites.
-- **Video Sources** separates searches, discovered pages, checked media bytes, embeds and eligible downloads. Select **Test viewing** to check a sample on your PC. **Metadata & imports** contains AniList, TVmaze, optional TMDB and file imports.
+## Start here
 
-See [owner help](docs/HELP.md), [website adapter configuration](docs/WEBSITES.md), and [verification and limits](docs/V3-AUDIT.md).
+- **Browser:** enter a public website. Use tabs, back/forward, refresh, bookmarks and find text. The toolbar menu can add or inspect the current site, or start Quick/Deep Search there. External websites have no native application bridge.
+- **Anime:** search **Pocket Monsters**, choose **Pokémon: Indigo League**, and open one of the three starter official episode pages. These are exact publisher handoffs, not a claim of a complete anime streaming catalog.
+- **Quick Search:** search **Caminandes**, select **Llamigos**, and play its actual Commons media file. Eligible files have format and destination controls.
+- **Deep Search:** try **Nartuo**, a character name, an actor or a remembered description. Optional clues, source selection, exclusion and refinement remain available without retyping. Results explain matching metadata; the app also looks for viewing pages for likely titles.
+- **Video Sources:** choose **Add Video Website**, paste a URL, inspect the suggested method, review the automatic sample search and save. Advanced settings are optional. A source can remain browse-only when automated searching is unavailable.
+- **History:** delete one item with ×, select several, clear all with confirmation, undo a recent deletion, search history or change retention/recording settings. Bookmarks and saved videos are separate.
 
-## Add a website
+See [owner help](docs/HELP.md), [verified behavior and measurements](docs/V4-AUDIT.md), [website adapters](docs/WEBSITES.md) and [testing](docs/TESTING.md).
 
-Open **Video Sources → Add Video Website**, enter a public website, inspect it, check the suggested configuration, test a sample title, then save. Supported methods include public GET search forms, HTML listings, structured VideoObject metadata, JSON, RSS/Atom and video sitemaps. Configure selectors, query parameters and episode links in the wizard.
+## Website compatibility
 
-For an example, enter **https://www.w3schools.com/html/html5_video.asp**, use the detected HTML video listing, and test **HTML Video**. Save it, choose the new source in Universal Video Search, and search again. The live browser workflow exercises this exact path.
+| Source | Search / discovery | Viewing | Download |
+| --- | --- | --- | --- |
+| Caminandes on Wikimedia Commons | Three animated episodes | Actual in-app playback tested on packaged Windows app | Completed licensed file transfer, decoded with FFmpeg |
+| Official Pokémon TV | Starter title aliases; first three Indigo League episodes | Exact publisher episode handoff verified; embed frames not verified | No eligible path offered |
+| W3Schools HTML Video page | Added through wizard; listing search verified | Actual direct playback in SceneTrace and native browser | No permission-backed download offered by this adapter |
+| HiAnime (`hianime.ms`) | Naruto search returns 27 results; Naruto detail page exposes 220 ordered episode links | Exact episode links; playback unverified | No verified eligible path |
 
-Optional JavaScript rendering uses an installed Edge or Chromium in an isolated profile. Brave Search is optional for wider source discovery. TMDB needs a personal API Read Access Token. Built-in viewing examples require neither key.
+HiAnime's failure was an omitted `/details/` link pattern in the parser. Its public GET search URL is `/search?q=Naruto`; the tested search and episode list did not require JavaScript. This repair does **not** verify third-party players or give download permission. Website content and restrictions can change; retest the source on your PC.
 
-## Playback and download scope
+AniList, TVmaze, Wikipedia/Wikidata and optional TMDB are metadata sources. Archive, Commons and PeerTube expose independent media capabilities; consult their latest connection report. TMDB requires your optional personal API Read Access Token. Optional Brave Search credentials enable wider source discovery. Built-in viewing examples need neither key.
 
-Direct browser playback supports compatible MP4/WebM/OGG files. Play, pause, seek, volume, fullscreen, speed and source-provided WebVTT subtitles are available according to the selected player. Official embeds can handle a provider's own adaptive playback. The direct file path covers progressive media. Protected subscriptions, DRM, login-only or challenge-gated pages, and arbitrary HLS/DASH extraction are unsupported. HiAnime and AnimeKai have no verified connectors in this release.
+## Limits
 
-Downloads use eligible source files and the existing queue, including pause and resume when the host supports ranges. The link analyzer can combine compatible yt-dlp video-only and audio-only HTTP tracks with bundled FFmpeg. Regional and account requirements can affect official player handoffs.
+No promise of universal site compatibility. Login barriers, anti-bot challenges, DRM, paywalls and protected playback are not bypassed. Arbitrary HLS/DASH extraction is unsupported; official players may handle their own adaptive streams. A direct media URL alone does not create a download button. The queue supports eligible HTTP files, pause/resume when the host supports ranges, retry, disk checks and compatible FFmpeg processing.
+
+Deep Search uses bounded live catalogs, full-text retrieval, fuzzy titles, aliases, character/cast relationships, local FTS5 and evidence ranking. It does not recognize scenes absent from the available sources, and does not download an embedding model. Live provider results and rights vary by region and date.
 
 ## Verification
 
-Run **python -m pytest -q** and **python scripts/smoke.py** for local checks. CI runs live provider checks, genuine browser playback, setup of a real user-added HTML source, and a completed licensed episode download. The Windows job repeats playback with the actual packaged executable. The ZIP includes **docs/live-results.json**, **docs/watch-results.json** and **docs/BUILD.json**. The release includes screenshots and a ZIP checksum.
+The Windows pipeline builds the real executable, launches it, checks migration/restart, exercises WebView2 tabs and isolation, recovers a crashed renderer, plays real media and completes a licensed episode download. Browser tests cover the real Add Website and search-to-player workflow. The release ZIP contains build information and live reports; screenshots and SHA-256 checksum accompany the release. Performance figures are measured on shared Windows CI, not a low-end hardware guarantee.
