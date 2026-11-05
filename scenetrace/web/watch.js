@@ -26,13 +26,6 @@ function watchSearchPage(mode) {
     const categories = [...new Set(active.flatMap(source => source.categories))].sort();
     const options = active.map(source => '<option value="' + esc(source.id) + '"' +
         (visible && watchState.sourceId === source.id ? ' selected' : '') + '>' + esc(source.name) + '</option>').join('');
-    const status = visible ? watchState.sources.map(source =>
-        '<li>' + esc(source.name) + ' · ' + esc(source.message || (source.count ?? 0) + ' matches') + '</li>').join('') : '';
-    const rows = visible ? watchState.rows : [];
-    const videos = rows.map((record, index) => ({record, index})).filter(row => row.record.is_video);
-    const titles = rows.map((record, index) => ({record, index})).filter(row => !row.record.is_video);
-    const section = (heading, list) => list.length ? '<h2>' + heading + '</h2><div class="grid">' +
-        list.map(row => watchCard(row.record, row.index)).join('') + '</div>' : '';
     return title(anime ? 'ANIME' : 'VIDEO DISCOVERY', anime ? 'Find anime to watch' : 'Find videos on your websites',
         anime ? 'Search by English, Japanese or Romaji title. Choose a result to see available episode pages.' :
             'Search connected video websites. Open a result to see the source player or available files.') +
@@ -45,11 +38,23 @@ function watchSearchPage(mode) {
         '</select></div><details class="panel"><summary>Select several sources</summary><div class="source-select">' +
         active.map(source => '<label class="source-chip"><input type="checkbox" data-watch-filter value="' + esc(source.id) + '"' +
             (!visible || !watchState.selectedIds || watchState.selectedIds.includes(source.id) ? ' checked' : '') + '>' +
-            esc(source.name) + '</label>').join('') + '</div></details>' + (visible && watchState.busy ? '<div class="loading">Searching connected sources…</div>' : '') +
+            esc(source.name) + '</label>').join('') + '</div></details>' + '<section id="watch-results">' + watchResults(mode) + '</section>';
+}
+
+function watchResults(mode) {
+    const visible = watchState.mode === mode;
+    const status = visible ? watchState.sources.map(source =>
+        '<li>' + esc(source.name) + ' · ' + esc(source.message || (source.count ?? 0) + ' matches') + '</li>').join('') : '';
+    const rows = visible ? watchState.rows : [];
+    const videos = rows.map((record, index) => ({record, index})).filter(row => row.record.is_video);
+    const titles = rows.map((record, index) => ({record, index})).filter(row => !row.record.is_video);
+    const section = (heading, list) => list.length ? '<h2>' + heading + '</h2><div class="grid">' +
+        list.map(row => watchCard(row.record, row.index)).join('') + '</div>' : '';
+    return (visible && watchState.busy ? '<div class="loading">Searching connected sources… <button data-watch="cancel">Cancel search</button></div>' : '') +
         (visible && watchState.error ? '<div class="notice error" role="alert">' + esc(watchState.error) + '</div>' : '') +
         section('Video results', videos) + section('Title matches', titles) +
         (visible && watchState.query && !watchState.busy && !rows.length && !watchState.error
-            ? empty('No matching videos or titles', 'Try an alternative title, change the website filter or use Memory Search.') : '') +
+            ? empty('No matching videos or titles', 'Try an alternative title, change the website filter or use Deep Search.') : '') +
         (status ? '<details class="panel"><summary>Source responses</summary><ul>' + status + '</ul></details>' : '') +
         (visible && watchState.more ? '<button data-watch="more">More results</button>' : '');
 }
@@ -64,16 +69,25 @@ async function searchVideos(query, mode, page = 1) {
     if (page === 1) Object.assign(watchState, {rows: [], sources: []});
     renderPage();
     try {
-        const result = await api('watch/search', {query, mode, page, category, sources: sourceId ? [sourceId] : selectedIds});
-        if (request !== watchState.request) return;
-        const rows = new Map([...watchState.rows, ...result.results].map(record => [record.id, record]));
-        Object.assign(watchState, {rows: [...rows.values()], sources: result.sources, more: result.has_more});
+        if (watchState.job) await api('deep/cancel', {id: watchState.job});
+        const job = await api('watch/start', {query, mode, page, category, sources: sourceId ? [sourceId] : selectedIds});
+        watchState.job = job.id;
+        while (request === watchState.request) {
+            const result = await api('watch/poll', {id: job.id, mode});
+            if (request !== watchState.request) return;
+            const rows = new Map([...watchState.rows, ...result.results].map(record => [record.id, record]));
+            Object.assign(watchState, {rows: [...rows.values()], sources: result.sources, more: result.has_more,
+                                      busy: result.status === 'running', error: result.message || ''});
+            if (state.view === mode && $('watch-results')) $('watch-results').innerHTML = watchResults(mode);
+            if (!watchState.busy) {await reload(); break;}
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
     } catch (error) {
         if (request === watchState.request) watchState.error = error.message;
     } finally {
         if (request === watchState.request) {
             watchState.busy = false;
-            if (state.view === mode) renderPage();
+            if (state.view === mode && $('watch-results')) $('watch-results').innerHTML = watchResults(mode);
         }
     }
 }
@@ -169,14 +183,14 @@ function videoSourcesPage() {
     const cards = state.data.sources.filter(source => source.role !== 'metadata').map(source => {
         const capability = source.video_checks || {};
         const checks = [
-            ['Search', capability.search], ['Video pages', capability.discovery],
+            ['Browsing', capability.browsing], ['Search', capability.search], ['Video pages', capability.discovery],
             ['Playback', capability.playback], ['Download', capability.download],
         ].map(([label, value]) => '<li>' + esc(label) + ' · ' + esc(value || 'Unchecked on this PC') + '</li>').join('');
         return '<article class="source-card"><h3>' + esc(source.name) + '</h3><p>' + esc(source.description) +
             '</p><ul class="capabilities">' + checks + '</ul>' + ((capability.error || capability.detail) ? '<p class="inline-error">' + esc(capability.error || capability.detail) + '</p>' : '') +
             '<div class="actions"><label class="toggle"><input type="checkbox" data-enable="' + esc(source.id) + '"' +
             (source.enabled ? ' checked' : '') + '>Enabled</label><button data-watch="test-source" data-id="' + esc(source.id) +
-            '">Test viewing</button>' + (source.kind === 'website' ? '<button data-watch="edit-website" data-id="' +
+            '">Test viewing</button><button data-browse="' + esc(source.website || source.endpoint) + '">Browse website</button>' + (source.kind === 'website' ? '<button data-watch="edit-website" data-id="' +
             esc(source.id) + '">Edit website</button>' : '') + '</div></article>';
     });
     return title('VIDEO SOURCES', 'Choose where SceneTrace looks', 'Enable video websites and test the options they expose.') +
@@ -191,6 +205,10 @@ document.addEventListener('click', async event => {
     const index = Number(button.dataset.index);
     button.disabled = true;
     try {
+        if (button.dataset.watch === 'cancel') {
+            await api('deep/cancel', {id: watchState.job}); watchState.request++; watchState.busy=false;
+            if ($('watch-results')) $('watch-results').innerHTML=watchResults(watchState.mode);
+        }
         if (button.dataset.watch === 'title') await showViewing(watchState.rows[index]);
         if (button.dataset.watch === 'play') await selectEpisode(index);
         if (button.dataset.watch === 'more') await searchVideos(watchState.query, watchState.mode, watchState.page + 1);
@@ -273,7 +291,7 @@ function websiteWizard(existing = null, website = '') {
         return;
     }
     dialog('Add Video Website',
-        '<p class="meta">1 Website → 2 Inspect → 3 Configure → 4 Test → 5 Save</p>' +
+        '<p class="meta">1 Website → 2 Inspect → 3 Test → 4 Save</p>' +
         '<p>Enter a public website, a video listing or a feed. SceneTrace will look for an available search method.</p>' +
         '<form data-site-form="inspect"><label for="website-url">Website URL</label><input id="website-url" name="url" type="url" required value="' +
         esc(website) + '" placeholder="https://example.org/videos"><div class="actions"><button class="primary">Inspect website</button>' +
@@ -283,7 +301,7 @@ function websiteWizard(existing = null, website = '') {
 function showWebsiteConfig(config) {
     const strategies = [
         ['html', 'Public search form or HTML results'], ['listing', 'HTML video listing'],
-        ['json', 'Public JSON search or listing'], ['feed', 'RSS, Atom or Media RSS'], ['sitemap', 'Video sitemap'],
+        ['browse', 'Browsing only'], ['json', 'Public JSON search or listing'], ['feed', 'RSS, Atom or Media RSS'], ['sitemap', 'Video sitemap'],
     ];
     const options = strategies.map(([key, label]) =>
         '<option value="' + key + '"' + (key === config.strategy ? ' selected' : '') + '>' + label + '</option>').join('');
@@ -294,7 +312,7 @@ function showWebsiteConfig(config) {
         '<div><label for="website-map-' + key + '">JSON ' + key + ' field</label><input id="website-map-' + key +
         '" name="map_' + key + '" placeholder="' + key + '" value="' + esc(config.mapping?.[key] || '') + '"></div>').join('');
     dialog(config.id ? 'Edit Video Website' : 'Configure Video Website',
-        '<p class="meta">3 Configure → 4 Test → 5 Save</p>' +
+        '<p class="meta">Review the detected settings and test a title. Advanced settings are optional.</p>' +
         (config.findings || []).map(finding => '<div class="notice">' + esc(finding) + '</div>').join('') +
         '<form data-site-form="test" data-id="' + esc(config.id || '') + '"><div class="form-grid">' +
         '<div><label for="website-name">Name</label><input id="website-name" name="name" required value="' + esc(config.name || '') + '"></div>' +
@@ -329,7 +347,7 @@ function showWebsiteTest(result) {
         '</ul><ul>' + result.results.map(row => '<li>' + external(row.url, row.title) + '</li>').join('') + '</ul>' +
         (direct ? '<video controls preload="none" class="episode-frame" src="' + esc(direct) + '"></video>' : '') +
         (sample ? '<p>' + external(sample.original, 'Open sample source page') + '</p>' : '') +
-        (result.save_ticket ? '<button type="button" class="primary" data-site="save" data-ticket="' +
+        (result.browse_ticket ? '<button type="button" data-site="save" data-ticket="' + esc(result.browse_ticket) + '">Save for browsing</button>' : '') + (result.save_ticket ? '<button type="button" class="primary" data-site="save" data-ticket="' +
             esc(result.save_ticket) + '">Save website</button>' : '');
 }
 
@@ -345,7 +363,12 @@ document.addEventListener('submit', async event => {
     try {
         if (action === 'inspect') {
             $('website-inspection').innerHTML = '<p class="loading">Inspecting public website…</p>';
-            showWebsiteConfig(await api('watch/inspect', values));
+            let detected;
+            try {detected = await api('watch/inspect', values);}
+            catch (error) {detected = {name: new URL(values.url).hostname, endpoint: values.url, strategy: 'browse', findings: [error.message]};}
+            detected.query ||= 'video';
+            showWebsiteConfig(detected);
+            document.querySelector('[data-site-form="test"]').requestSubmit();
         } else if (action === 'test') {
             $('website-test').innerHTML = '<p class="loading">Searching and checking a sample page…</p>';
             const webConfig = Object.fromEntries(websiteFields.map(([key]) => [key, values[key] || '']));
@@ -358,6 +381,11 @@ document.addEventListener('submit', async event => {
                 categories: values.categories.split(',').map(s => s.trim()).filter(Boolean),
                 query: values.query, sample_url: values.sample_url, web_config: webConfig, mapping,
             });
+            if (!document.contains(form)) return;
+            if (JSON.stringify(Object.fromEntries(new FormData(form))) !== JSON.stringify(values)) {
+                delete result.save_ticket; delete result.browse_ticket;
+                result.message = 'Settings changed during the test. Test again before saving.';
+            }
             $('website-test').innerHTML = showWebsiteTest(result);
         } else if (action === 'discover') {
             $('website-discovery').innerHTML = '<p class="loading">Looking for sources…</p>';

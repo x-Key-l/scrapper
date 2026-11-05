@@ -10,3 +10,18 @@
 #watch-player{margin:1.2rem 0}
 .capabilities{padding-left:1rem;font-size:.9rem}
 @media(max-width:540px){.watch-cover{width:85px}.watch-title{gap:.75rem}}
+
+/* Compact workspace: more room for pages, results and episode navigation. */
+h1{font-size:29px;margin-bottom:10px;letter-spacing:-.6px}.eyebrow{margin-bottom:8px}
+button{padding:8px 12px}.panel{padding:17px}.section-title{margin-top:25px}
+.grid{grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:16px}.card-body{padding:15px}
+.history-item{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.history-item button{border:0;border-radius:0;background:transparent}.history-item .quiet{padding:8px 10px}
+.history-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.history-row input[type=checkbox]{width:18px;height:18px;flex-shrink:0}.history-query{text-align:left;flex:1;background:transparent;border:0}
+.history-query small{display:block;font-weight:400;margin-top:4px}.history-row small{color:var(--muted)}
+.source-result{display:block;width:100%;text-align:left;margin:6px 0;font-size:12px}
+.match-label{color:var(--accent);font-size:12px}.deep-grid .evidence{margin:12px 0}.evidence ul{padding-left:18px}
+#deep-progress{min-height:20px}.deep-grid .card-actions{flex-wrap:wrap}.toolbar{flex-wrap:wrap}
+@media(min-width:900px){.sidebar{width:205px;padding:22px 14px}.shell{margin-left:205px}main{padding:26px 30px}.nav-item{padding:9px 12px}}
+@media(max-width:540px){h1{font-size:25px}.history-row{gap:5px}.history-row small{font-size:11px}.toolbar select{width:100%}}

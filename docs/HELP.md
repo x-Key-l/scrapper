@@ -1,31 +1,65 @@
 # SceneTrace owner guide
 
-## Find an episode
+## Browse and search
 
-Open **Anime**, type a title, and select **View video options** or **Find episodes**. A title from AniList may give you alternate names or exact episode links from an official provider. A connected video website can supply more matches. Pick an episode to load its player. If the player is unavailable, use **Open exact video at source**.
+Open **Browser**, enter a full website address and choose **Open**. In the Windows browser, Ctrl+L selects the address, Ctrl+T opens a tab, Ctrl+W closes it, Ctrl+F finds text and F5 reloads. Back/Forward preserve each tab's navigation. Use the star to bookmark a page. Bookmarks and browsing history appear in SceneTrace's Browser and History views.
 
-Try **Pocket Monsters** for the first three official Indigo League episodes. For an in-app video, search **Caminandes** in Universal Video Search and select **Llamigos**.
+The toolbar menu can **Add this website**, search it, inspect the current video page, save it, or open it in your normal browser. **Search current website** needs a connected searchable source. If automation is unsupported, ordinary browsing remains available. A failed website or renderer can be retried with Refresh. Use the external-browser option if a site's player cannot run inside WebView2.
 
-## Search a website you added
+Tabs are created lazily and inactive website views may be suspended. SceneTrace uses one shared WebView2 runtime environment, with separate application and website profiles. Close tabs you no longer need; heavy advertising sites can still consume substantial memory.
 
-1. Open **Video Sources → Add Video Website**.
-2. Paste the website, listing or feed URL and choose **Inspect website**.
-3. Review the connection method. Use advanced fields for a documented query parameter, CSS selectors, a JSON mapping or an episode listing.
-4. Enter a sample title and choose **Test integration**. Review the returned pages, playback and download status.
-5. Save the tested configuration. Choose its name in Universal Video Search and search again.
+## Find and watch an episode
 
-**Find More Sources** lists available connectors. Add a Brave Search key in Settings if you want additional web candidates. Discovered sites remain unverified until tested.
+Open **Anime**, type **Pocket Monsters**, and select **Pokémon: Indigo League**. Choose one of the first three official episode pages. An official embed is offered when exposed; **Open exact video at source** remains available. Region or account requirements can affect the publisher player.
 
-## Download a video
+For a verified direct in-app video, search **Caminandes** in **Quick Search**, choose the series, then **Llamigos**. The native player has seeking, volume, speed and fullscreen controls. Provider embeds expose their own controls. Subtitle options appear only when the source supplies compatible tracks.
 
-Open a video with eligible files, expand **Download this video**, choose the format and destination, and confirm your authorization. Track or pause the transfer under **Downloads**. An interrupted transfer can resume when its host supports a byte range.
+Metadata cards are identification leads. Select **Find viewing options** to search connected video sites. A poster alone never establishes playback or a download.
 
-## Use a description
+## Add a website
 
-Open **Memory Search**, describe your remembered scene or plot, and open a match. Choose **Find Video** for source and episode options. More distinctive details and alternative titles can improve the match.
+1. Choose **Video Sources → Add Video Website**, or add the current browser page from its toolbar menu.
+2. Paste a public website, listing or feed URL and select **Inspect website**.
+3. SceneTrace detects public methods and runs a sample search. Replace the sample title if necessary and **Test integration** again.
+4. Review search results and each capability separately. Save the tested source, or keep a browse-only entry when integration is incomplete.
+5. In Quick Search, select that website and enter a title.
 
-## Internet Archive certificate error
+Try **https://www.w3schools.com/html/html5_video.asp** with **HTML Video**. This listing exposes a real video. For **https://hianime.ms/**, the tested **Naruto** search retrieves title pages and 220 Naruto episode links. Playback and download from that website remain unverified; open an exact episode page to check its player. No access-control bypass is provided.
 
-Open **Settings → Test Archive HTTPS**. SceneTrace uses Windows certificate trust and checks the server hostname. If Windows rejects the chain, compare the same Archive URL in Edge and check the PC clock. On a managed network, have the administrator confirm the certificate issuer used by the proxy or antivirus. The app reports the certificate error code when available.
+Advanced configuration supports search URL patterns, selectors, JSON mappings and feeds. Ordinary detected layouts do not require selector editing. You can edit, disable, retest or remove a source independently. A changed layout, restricted service, JavaScript requirement, network error and genuine empty search are reported separately.
 
-TMDB's **Optional key needed** label means its catalog needs your own API Read Access Token. Playback from the built-in examples works without that key.
+**Find More Sources** suggests documented integrations. An optional Brave Search key adds web discovery. Candidates remain unverified until tested.
+
+## Deep Search
+
+Enter an imperfect title or remembered description. Add optional character, actor, period or category clues. Example: **Nartuo**. Another example: **A movie where people discover an underground cave and encounter dangerous creatures**.
+
+Results arrive as sources respond. **Cancel** stops further retrieval while preserving received results. Evidence lists actual title, plot, character or cast matches. A remembered year is a soft clue, so a wrong decade does not remove otherwise useful matches. Exclude wrong candidates, add details and refine. Search additional pages to explore more of a provider's index.
+
+SceneTrace checks connected video websites for likely titles and alternatives. Source availability is independent of relevance. Full-text articles and popular-catalog browsing have limited coverage; no result is a guarantee that every scene detail matches.
+
+## Manage history
+
+Use × beside a recent search to delete just that item. **History** supports text filtering, selection, bulk deletion and clearing all search history. Bulk deletion asks for confirmation. **Undo** is available for 60 seconds. Deleted entries stay deleted after restart.
+
+History settings control future recording and automatic retention. Turning recording off does not erase previous entries. A retention value of 0 keeps history until you remove it. Search-history deletion does not remove bookmarks, saved videos, sources or downloads. Browsing history has its own recording control.
+
+## Download an eligible video
+
+Open an episode that offers files, expand **Download this video**, choose an available format and destination, and confirm your authorization. **Downloads** shows progress, speed, remaining time, pause, cancel and retry. Resume depends on the server supporting byte ranges and retaining the same file. Collisions produce a new filename; disk space is checked. Compatible separate HTTP audio/video tracks can be combined with bundled FFmpeg.
+
+Some sources offer viewing only. SceneTrace keeps the exact original link when no eligible file is available. It does not bypass DRM, paywalls, login barriers or anti-bot challenges.
+
+## Startup and upgrades
+
+Extract the entire ZIP and launch SceneTrace.exe. Keep its companion executable, DLLs and _internal folder together. The integrated browser uses Microsoft's WebView2 Evergreen Runtime. If unavailable, the app opens in your default browser. Install the runtime from Microsoft's official WebView2 page to enable integrated tabs. Runtime installation and first startup may take longer than subsequent launches.
+
+Quit the old app before upgrading. Extract the new release into a separate folder. The profile stays at **%LOCALAPPDATA%\SceneTrace**. Save a copy of that profile before rolling back to an older version. Repeated launches focus the current application instead of creating another server.
+
+## Troubleshooting
+
+**Settings → Test Archive HTTPS** checks Internet Archive using Windows certificate trust and hostname validation. If Windows rejects the chain, check the PC clock and compare the same URL in Edge. On a managed network, ask its administrator to check a proxy or antivirus certificate issuer. SceneTrace never disables TLS validation to work around the error.
+
+TMDB's **Optional key needed** status is a setup choice, not a failure of built-in playback. Configure your personal API Read Access Token only if you want that catalog. No paid AI key is needed.
+
+Use **Settings → Export diagnostics** for a report that omits credentials, search text, media URLs and local paths. Retest one failing source; other sources can continue working. Long transfers, sleep/wake, SmartScreen and performance on your own hardware still require owner-side acceptance testing.

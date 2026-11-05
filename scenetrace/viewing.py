@@ -97,7 +97,7 @@ class Viewing:
             raise ValueError('This viewing option expired. Open the video again.')
         return entry[2]
 
-    def search(self, body):
+    def search_scope(self, body):
         anime = body.get('mode') == 'anime'
         selected = body.get('sources')
         category = body.get('category') or ''
@@ -109,8 +109,14 @@ class Viewing:
             and (not category or category in s.get('categories', []))
             and (anime or s['role'] in ('media', 'hybrid'))
         ]
-        mode = 'search' if anime else 'media'
-        output = self.app.search.run(body.get('query', ''), ids, body.get('page', 1), mode)
+        return ids
+
+    def search(self, body):
+        output = self.app.search.run(body.get('query', ''), self.search_scope(body), body.get('page', 1))
+        return self.decorate(output, body.get('mode') == 'anime')
+
+    def decorate(self, output, anime=False):
+        active = self.app.store.sources(public=True)
         by_id = {s['id']: s for s in active}
         rows = []
         for item in output['results']:
@@ -312,7 +318,11 @@ class Viewing:
         except (OSError, ValueError) as error:
             message = str(error) if isinstance(error, ValueError) else 'The website did not complete the request.'
             checks['error'] = message
-            return {'ok': False, 'checks': checks, 'results': rows[:6], 'message': message}
+            # A later episode/player outage must not erase a verified search method.
+            searchable = any(row.get('media_urls') for row in rows)
+            return {'ok': searchable, 'checks': checks, 'results': rows[:6], 'message': message,
+                    'error_code': getattr(error, 'code', 'connection_error'),
+                    'diagnostics': getattr(error, 'diagnostics', {})}
 
     def test_website(self, body):
         previous = self.app.store.source(body.get('id'))
@@ -331,6 +341,10 @@ class Viewing:
         if result['ok']:
             config['video_checks'] = result['checks']
             result['save_ticket'] = self.ticket('website-config', config)
+        else:
+            browsing = dict(config, web_config=dict(config['web_config'], strategy='browse'),
+                            video_checks={'search': 'Integration incomplete', 'playback': 'Manual browsing available'})
+            result['browse_ticket'] = self.ticket('website-config', browsing)
         return result
 
     def save_website(self, ticket):

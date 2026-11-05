@@ -156,4 +156,23 @@ def test_video_gallery_upgrade_preserves_existing_profile(tmp_path):
     assert store.setting('destination') == 'existing-folder'
     assert store.saved()[0]['id'] == 'saved:previous-release'
     assert store.history()[0]['query'] == 'existing search'
-    assert {source['id'] for source in store.sources()} == {'open-animation', 'pokemon-tv'}
+    assert {source['id'] for source in store.sources()} == {'open-animation', 'pokemon-tv', 'encyclopedia'}
+    store.delete_source('encyclopedia')
+    defaults(store)
+    assert store.source('encyclopedia') is None
+
+
+def test_successful_search_can_be_saved_when_episode_page_is_down(monkeypatch):
+    from scenetrace import sources, websites
+    from scenetrace.viewing import Viewing
+    from scenetrace.model import record
+    source = {'id':'website','kind':'website','name':'Example','endpoint':'https://example.org/'}
+    rows = [record('website', 1, 'Example', url='https://example.org/details/1', media_urls=['https://example.org/details/1'])]
+    monkeypatch.setattr(sources, 'search', lambda *a: (rows, False))
+    def unavailable(*a): raise ValueError('Source returned HTTP 503.')
+    monkeypatch.setattr(websites, 'episodes', unavailable)
+    result = Viewing(None).check(source, 'Example')
+    assert result['ok'] is True
+    assert result['checks']['search'] == '1 results returned'
+    assert result['checks']['playback'] == 'Unchecked'
+    assert '503' in result['message']

@@ -62,6 +62,7 @@ def run(command):
             episode = post('watch/play', {'ticket': episodes[2]['ticket']})
             assert episode['playback'] == 'direct', episode
             fmt = next(f for f in episode['formats'] if f['id'] == episode['playing_format_id'])
+            transfer_started = time.perf_counter()
             job = post('download/add', {'analysis_id': episode['analysis_id'], 'format_id': fmt['id'],
                                         'destination': folder, 'authorized': True, 'output': 'original'})
             for _ in range(110):
@@ -70,6 +71,7 @@ def run(command):
                     break
                 time.sleep(1)
             assert job['status'] == 'completed', job
+            transfer_seconds = time.perf_counter() - transfer_started
             output = Path(job['path'])
             assert output.stat().st_size > 100_000
             subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-i', str(output),
@@ -77,6 +79,9 @@ def run(command):
             report.append({'source': 'Caminandes on Wikimedia Commons', 'search': 'Passed', 'episodes': len(episodes),
                            'playback': 'Player resolver checked real media bytes. Browser playback tested separately.',
                            'download': 'Complete and FFmpeg decoded', 'bytes': output.stat().st_size,
+                           'queue_to_completion_seconds': round(transfer_seconds, 3),
+                           'effective_mib_per_second': round(output.stat().st_size / 1048576 / transfer_seconds, 3),
+                           'measurement_scope': 'One small licensed file on Windows CI; includes queue and one-second polling. Not an internet speed guarantee.',
                            'sha256': hashlib.sha256(output.read_bytes()).hexdigest()})
             Path('watch-results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
             print(json.dumps(report, indent=2))

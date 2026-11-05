@@ -43,6 +43,8 @@ def record(source, ident, title, **f):
                 description=text(f.get('description')), year=year(f.get('year')),
                 category=text(f.get('category') or 'video'), genres=f.get('genres') or [],
                 creators=f.get('creators') or [], thumbnail=url(f.get('thumbnail')), url=url(f.get('url')),
+                characters=f.get('characters') or [], cast=f.get('cast') or [],
+                retrieval_evidence=f.get('retrieval_evidence') or [],
                 duration=number(f.get('duration')), languages=f.get('languages') or [],
                 external_ids=f.get('external_ids') or {},
                 media_urls=[u for x in f.get('media_urls', []) if (u := url(x))],

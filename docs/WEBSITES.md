@@ -24,3 +24,9 @@ The optional **Render public pages** switch starts a fresh installed Edge or Chr
 Register a built-in kind and capability description in **scenetrace/sources.py**. Implement search with **search(source, query, page)** returning normalized records and a pagination flag. Preserve the provider ID, title, alternatives, page URL, artwork and source ID. Supply stable page or episode URLs in **scenetrace/viewing.py**, and return verified direct formats, an official embed or the exact source page. Verify download permission independently of playback. Use **scenetrace.network** for public requests, certificate checks and address validation.
 
 Add an actual provider integration test for the capabilities you claim. The app accepts configuration data through the wizard. Developer adapters are shipped as reviewed source code.
+
+## 4.0 detection and diagnostics
+
+The wizard detects common public result-card layouts and `/details/` pages, runs a real sample and stores capabilities individually. Numbered `data-ep` episode lists are sorted numerically. A functioning search may be saved even when a subsequent episode/player check fails; its failed capability remains explicit. Manual browse-only entries preserve navigation without pretending to support search.
+
+`WebsiteSearchError` distinguishes service restrictions, JavaScript requirements, missing result structure and browse-only configuration. Detailed parser context is available to diagnostics; ordinary users see an explanation. An HTTP 200 homepage alone is not a successful connector test. Edits invalidate in-flight test/save tokens so old results cannot save a different configuration.

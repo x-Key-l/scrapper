@@ -54,7 +54,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream(path.removeprefix('/media/'))
         asset='index.html' if path=='/' else path.lstrip('/')
         # Serve only flat bundled assets, never arbitrary local paths.
-        if asset not in ('index.html','style.css','app.js','watch.js','icon.svg'):
+        if asset not in ('index.html','style.css','app.js','watch.js','workspace.js','deep.js','icon.svg'):
             return self.send(404,{'detail':'Not found.'})
         file=PUBLIC/asset
         return self.send(200,file.read_bytes(),MIME.get(file.suffix,'application/octet-stream'))
@@ -107,6 +107,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403,{'detail':'External webpages cannot access this local API.'})
         if self.headers.get('Sec-Fetch-Site','same-origin') not in ('same-origin','none') or self.headers.get('X-SceneTrace')!='local':
             return self.send(403,{'detail':'Open SceneTrace in its own browser tab.'})
+        if self.path.startswith('/api/desktop/') and not secrets.compare_digest(
+                self.headers.get('X-SceneTrace-Desktop', ''), self.server.app.desktop_token):
+            return self.send(403, {'detail': 'This action requires the native application.'})
         if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0]!='application/json':
             return self.send(400,{'detail':'Use a JSON request.'})
         try:
@@ -234,17 +237,27 @@ def main():
         existing=instance.existing()
         instance.close()
         if existing:
-            if not args.no_browser:webbrowser.open(existing)
+            if not args.no_browser:
+                from .desktop import focus_existing
+                try:
+                    info = json.loads(instance.path.read_text())
+                except (OSError, ValueError):
+                    info = {}
+                if not focus_existing(info): webbrowser.open(existing)
             return
         raise RuntimeError('SceneTrace is already starting or closing. Wait a few seconds and open it again.')
     server=None
     try:
         server=make_server(root,args.port)
         address='http://127.0.0.1:'+str(server.server_port)
-        instance.path.write_text(json.dumps({'url':address,'instance':server.instance}),encoding='utf-8')
+        info = {'url': address, 'instance': server.instance}
+        instance.path.write_text(json.dumps(info), encoding='utf-8')
         for sig in (signal.SIGINT,signal.SIGTERM):
             signal.signal(sig,lambda *_:threading.Thread(target=server.shutdown,daemon=True).start())
-        if not args.no_browser:webbrowser.open(address)
+        if not args.no_browser:
+            from .desktop import launch
+            launch(server, address, root, info)
+            instance.path.write_text(json.dumps(info), encoding='utf-8')
         if sys.stdout:print('SceneTrace '+address,flush=True)
         server.serve_forever(poll_interval=.2)
     finally:

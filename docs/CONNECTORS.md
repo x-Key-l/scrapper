@@ -4,6 +4,7 @@ Adapters return normalized records and a per-query pagination flag. Original pro
 
 | Connector | API documentation | Credential | Role |
 |---|---|---|---|
+| Wikipedia + Wikidata | https://www.mediawiki.org/wiki/API:Search and https://www.wikidata.org/wiki/Wikidata:Data_access | None | Metadata / explicit relationships |
 | TVmaze | https://www.tvmaze.com/api | None | Metadata |
 | AniList | https://docs.anilist.co | None for public search | Metadata |
 | Internet Archive | https://archive.org/developers | None for public items | Hybrid |

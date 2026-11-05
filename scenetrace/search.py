@@ -34,36 +34,11 @@ def clues(q, hints=None):
 
 
 def rank(q, records, memory=None):
-    wanted = set(tokens(q))
-    expanded = set((memory or {}).get('expanded') or wanted)
-    docs = [set(tokens(r['title']+' '+' '.join(r.get('alternatives', []))+' '+r['description']+' '+' '.join(r.get('genres', [])))) for r in records]
-    freq = Counter(t for d in docs for t in d)
-    ranked = []
-    for r, doc in zip(records, docs):
-        title = set(tokens(r['title']+' '+' '.join(r.get('alternatives', []))))
-        matches = wanted & doc
-        evidence = []
-        score = sum((1+math.log(1+len(docs)/(1+freq[t])))*(4 if t in title else 1) for t in matches)
-        score += .35*len((expanded-wanted) & doc)
-        if q.casefold().strip() in [r['title'].casefold(), *(x.casefold() for x in r.get('alternatives', []))]:
-            score += 15
-            evidence.append('Exact title or alternative title')
-        if matches & title:
-            evidence.append('Title: '+', '.join(sorted(matches & title)))
-        if matches-title:
-            evidence.append('Metadata: '+', '.join(sorted(matches-title)))
-        if memory:
-            if memory.get('genre') in r.get('genres', []):
-                score += 2
-                evidence.append('Genre: '+memory['genre'])
-            if memory.get('category') and memory['category'] == r['category']:
-                score += 1
-            if memory.get('year_from') and r.get('year'):
-                delta = abs(r['year']-(memory['year_from']+4))
-                score += 2 if delta < 6 else -.5
-                evidence.append('Release '+str(r['year'])+(' fits the remembered decade' if delta < 6 else ' differs from the remembered decade'))
-        ranked.append(dict(r, relevance=round(score, 4), evidence=evidence or ['Returned by the provider; no direct clue overlap in available metadata']))
-    return sorted(ranked, key=lambda x:(-x['relevance'], x['title'].casefold()))
+    from .deep import rank as hybrid_rank, understand
+    analysis = understand(q, (memory or {}).get('hints'))
+    if memory:
+        analysis.update({k: memory[k] for k in ('genre', 'category', 'year_from') if memory.get(k)})
+    return hybrid_rank(q, records, analysis)
 
 
 def deduplicate(records):
@@ -89,6 +64,9 @@ def deduplicate(records):
                 old['origins'].append(origin)
             old['external_ids'] = {**old['external_ids'], **r.get('external_ids', {})}
             old['media_urls'] = list(dict.fromkeys(old['media_urls'] + r.get('media_urls', [])))
+            for field in ('alternatives', 'characters', 'cast', 'retrieval_evidence'):
+                merged = {json.dumps(x, sort_keys=True): x for x in old.get(field, []) + r.get(field, [])}
+                old[field] = list(merged.values())
             if len(r['description']) > len(old['description']):
                 old['description'] = r['description']
         for k in keys:
@@ -100,24 +78,26 @@ class SearchEngine:
     def __init__(self, store):
         self.store = store
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=6, thread_name_prefix='sources')
-        self.cancelled = set()
+        self.cancelled = {}
         self.lock = threading.Lock()
 
     def cancel(self, ident):
         with self.lock:
-            self.cancelled.add(ident)
+            self.cancelled = {k:v for k,v in self.cancelled.items() if time.monotonic()-v < 120}
+            self.cancelled[ident] = time.monotonic()
 
     def is_cancelled(self, ident):
         with self.lock:
             return ident in self.cancelled
 
-    def run(self, query, selected=None, page=1, mode='search', hints=None, refresh=False, request_id=''):
+    def run(self, query, selected=None, page=1, mode='search', hints=None, refresh=False, request_id='', progress=None):
         if not isinstance(query, str) or len(query.strip()) < 2 or len(query) > 8000:
             raise ValueError('Enter at least two characters, up to a full description of 8,000 characters.')
         if not isinstance(page, int) or page < 1:
             raise ValueError('Invalid result page.')
         query = query.strip()
-        memory = clues(query, hints) if mode == 'memory' else None
+        from .deep import understand
+        memory = understand(query, hints) if mode in ('deep', 'memory') else None
         active = [s for s in self.store.sources() if s.get('enabled') and (selected is None or s['id'] in selected)]
         if mode == 'media':
             active = [s for s in active if s['role'] in ('media','hybrid')]
@@ -125,9 +105,21 @@ class SearchEngine:
             return {'results':[], 'sources':[], 'has_more':False, 'notice':'Enable or connect a suitable source in Database Hub.', 'clues':memory}
         sid = [s['id'] for s in active]
         terms = (memory or {}).get('expanded') or tokens(query)
-        found = self.store.local_search(terms, sid, (page-1)*100)
+        found = self.store.local_search(self.store.expanded_terms(terms), sid, (page-1)*100)
         statuses, futures, has_more = [], {}, False
+        def snapshot(stage='Searching sources'):
+            output = {'results':rank(query, deduplicate(found), memory), 'sources':list(statuses), 'has_more':has_more,
+                      'clues':memory, 'stage':stage, 'pending':len(active)-len(statuses)}
+            if progress:
+                progress(output)
+            return output
+        snapshot('Searching connected sources')
         def load(s):
+            if mode in ('deep', 'memory'):
+                from .deep_sources import retrieve
+                rows, more = retrieve(s, query, memory, self.store, page, lambda: self.is_cancelled(request_id))
+                self.store.put_records(rows)
+                return rows, more
             queries = (memory['queries'][:2] if memory else [query])
             if not queries:
                 queries = [query]
@@ -169,7 +161,7 @@ class SearchEngine:
                     rows, more = f.result()
                     found.extend(rows)
                     has_more |= more
-                    s.update(health='Verified', last_sync=time.time(), last_query=query, last_error='')
+                    s.update(health='Search responded', last_sync=time.time(), last_query=query, last_error='')
                     statuses.append({'id':s['id'],'name':s['name'],'status':'ok','count':len(rows)})
                 except Exception as exc:
                     message = str(exc) if isinstance(exc, ValueError) else 'Source could not be reached. Check internet access or try later.'
@@ -180,12 +172,13 @@ class SearchEngine:
                 if current:
                     current.update({k:s[k] for k in ('health','last_sync','last_error','last_query') if k in s})
                     self.store.put_source(current)
+                snapshot()
         for f in pending:
             f.cancel()
             s = futures[f]
             statuses.append({'id':s['id'],'name':s['name'],'status':'timeout','message':'Provider exceeded the search deadline. Other sources are available.'})
         self.store.history(query, mode)
-        result = rank(query, deduplicate(found), memory)
+        result = snapshot('Search finished')['results']
         # Guided hints boost ranking, rather than excluding possibly incorrect memories.
         return {'results':result, 'sources':statuses, 'has_more':has_more or len(found)>=100, 'clues':memory,
                 'notice':'Results come from connected catalogs. Memory ranking compares available metadata; scene-level identification requires a catalog containing those clues.' if memory else 'Metadata and media availability are checked separately.'}

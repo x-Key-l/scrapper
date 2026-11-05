@@ -31,9 +31,18 @@ ffmpeg=subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-L'],capture_output=True
 for name in ('live-results.json', 'watch-results.json'):
     if Path(name).exists():
         shutil.copyfile(name, stage/'docs'/name)
+for name in ('cold.json', 'warm.json'):
+    path = Path('artifacts/native-browser')/name
+    if path.exists(): shutil.copyfile(path, stage/'docs'/('native-browser-'+name))
+path = Path('artifacts/v4-live/results.json')
+if path.exists(): shutil.copyfile(path, stage/'docs'/'website-live-results.json')
+sdk = Path.home()/'.nuget/packages/microsoft.web.webview2/1.0.3537.50'
+for path in sdk.rglob('*'):
+    if path.is_file() and path.name.lower() in ('license.txt', 'license.md', 'license', 'thirdpartynotices.txt'):
+        shutil.copyfile(path, licenses/('WebView2-'+path.name))
 (stage/'docs'/'BUILD.json').write_text(json.dumps({'version':__version__,'commit':os.environ.get('GITHUB_SHA','local'),
     'python':sys.version,'os':sys.platform,'yt_dlp':importlib.metadata.version('yt-dlp'),
-    'imageio_ffmpeg':importlib.metadata.version('imageio-ffmpeg'),'verification':'Source tests and packaged executable HTTP smoke test precede packaging in CI.'},indent=2),encoding='utf-8')
+    'imageio_ffmpeg':importlib.metadata.version('imageio-ffmpeg'),'verification':'Source tests, packaged executable HTTP/restart checks, native WebView2 isolation/navigation/crash recovery/playback, licensed download and browser UI workflows precede packaging in CI.'},indent=2),encoding='utf-8')
 archive=shutil.make_archive('SceneTrace-Windows-x64','zip','release','SceneTrace')
 digest=hashlib.sha256(Path(archive).read_bytes()).hexdigest()
 Path('SceneTrace-Windows-x64.sha256').write_text(digest+'  SceneTrace-Windows-x64.zip\n')

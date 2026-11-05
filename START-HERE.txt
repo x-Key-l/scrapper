@@ -1,16 +1,21 @@
-SceneTrace 3.0 for Windows x64
+SceneTrace 4.0 for Windows 10/11 x64
 
-1. Right-click the ZIP and choose Extract All.
+1. Right-click SceneTrace-Windows-x64.zip and choose Extract All.
 2. Open the extracted SceneTrace folder.
-3. Double-click SceneTrace.exe. Keep _internal beside it.
+3. Double-click SceneTrace.exe. Keep ALL included files together.
 
-Try Anime and search Pocket Monsters for official Pokémon TV episodes.
-Try Universal Video Search and search Caminandes for an in-app video.
-Use Video Sources > Add Video Website to connect another public site.
-Use Memory Search when you remember scenes or plot details.
+Browser: browse websites in tabs; use the toolbar menu to add or search a site.
+Anime: search Pocket Monsters for official episode pages.
+Quick Search: search Caminandes and choose Llamigos for direct playback.
+Deep Search: describe a remembered scene, actor or character; refine the results.
+Video Sources: Add Video Website, inspect and review a real test, then save.
+History: delete one or several searches; use Undo for a recent deletion.
+Downloads: eligible files show format and destination controls in the player.
 
-Settings > Test Archive HTTPS checks Internet Archive on your PC.
+The integrated browser uses the installed Microsoft WebView2 runtime. If missing,
+SceneTrace opens your default browser and explains how to install the runtime.
+No Python, Node, Git or Docker installation is needed.
+
 Choose Quit SceneTrace before replacing or upgrading the portable folder.
-Your profile stays in %LOCALAPPDATA%\SceneTrace.
-
-See docs/HELP.md for the step-by-step guide.
+Your profile remains in %LOCALAPPDATA%\SceneTrace.
+See README.md and docs/HELP.md for help and verified source limitations.

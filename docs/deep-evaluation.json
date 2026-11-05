@@ -1,0 +1,1236 @@
+{
+  "scope": "Eleven fixed examples, not a general accuracy claim. Cold live tests use an empty local index per case. Paired ranking uses identical real provider candidates collected across these cases.",
+  "baseline_revision": "5383d468d3ce0fe2c21e2b86f80636399707869b",
+  "corpus_records": 435,
+  "summary": {
+    "cold_live_rank": {
+      "top_5": 10,
+      "top_10": 10,
+      "cases": 11
+    },
+    "v3_same_corpus_rank": {
+      "top_5": 7,
+      "top_10": 7,
+      "cases": 11
+    },
+    "v4_same_corpus_rank": {
+      "top_5": 10,
+      "top_10": 10,
+      "cases": 11
+    }
+  },
+  "cases": [
+    {
+      "case": "exact anime",
+      "query": "Naruto",
+      "hints": {},
+      "expected": [
+        "Naruto"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 0.714,
+      "sources": [
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 25
+        },
+        {
+          "id": "tvmaze",
+          "name": "TVmaze",
+          "status": "ok",
+          "count": 10
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:20",
+          "title": "Naruto",
+          "evidence": [
+            "Exact title: Naruto",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "tvmaze:495",
+          "title": "Naruto",
+          "evidence": [
+            "Exact title: Naruto",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:10075",
+          "title": "NARUTO×UT",
+          "evidence": [
+            "Similar title: NARUTO×UT",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:162561",
+          "title": "NARUTO×NINKU",
+          "evidence": [
+            "Similar title: NARUTO (2026)",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:594",
+          "title": "Naruto: The Lost Story - Mission: Protect the Waterfall Village",
+          "evidence": [
+            "Similar title: Naruto OVA 2",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:155348",
+          "title": "ROAD OF NARUTO",
+          "evidence": [
+            "Similar title: ROAD OF NARUTO",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:13667",
+          "title": "Road to Ninja: Naruto the Movie",
+          "evidence": [
+            "Similar title: Naruto Movie 9",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:4437",
+          "title": "Naruto Shippuden the Movie: Bonds",
+          "evidence": [
+            "Similar title: Naruto Movie 5",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:10589",
+          "title": "Naruto Shippuden the Movie: Blood Prison",
+          "evidence": [
+            "Similar title: Naruto Movie 8",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        },
+        {
+          "id": "anilist:2472",
+          "title": "Naruto Shippuden the Movie",
+          "evidence": [
+            "Similar title: Naruto Movie 4",
+            "Available metadata: naruto",
+            "Title clues: naruto"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 1,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "misspelled anime",
+      "query": "Nartuo",
+      "hints": {},
+      "expected": [
+        "Naruto"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 1.475,
+      "sources": [
+        {
+          "id": "tvmaze",
+          "name": "TVmaze",
+          "status": "ok",
+          "count": 10
+        },
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 0
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "tvmaze:495",
+          "title": "Naruto",
+          "evidence": [
+            "Similar title: Naruto"
+          ]
+        },
+        {
+          "id": "tvmaze:27376",
+          "title": "Alternatino with Arturo Castro",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:39183",
+          "title": "Bartu Ben",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:23796",
+          "title": "Boruto: Naruto Next Generations",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:89871",
+          "title": "Narco Mennonites",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:52278",
+          "title": "Narco Wars",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:7115",
+          "title": "Naruto SD: Rock Lee no Seishun Full-Power Ninden",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:488",
+          "title": "Naruto: Shippūden",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:5183",
+          "title": "Subete ga F ni Naru: The Perfect Insider",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        },
+        {
+          "id": "tvmaze:95179",
+          "title": "The Narco Hack",
+          "evidence": [
+            "Provider candidate; available metadata has no direct clue overlap"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 259,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "Japanese title",
+      "query": "進撃の巨人",
+      "hints": {},
+      "expected": [
+        "Attack on Titan",
+        "Shingeki no Kyojin"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 2.162,
+      "sources": [
+        {
+          "id": "tvmaze",
+          "name": "TVmaze",
+          "status": "ok",
+          "count": 2
+        },
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 20
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:16498",
+          "title": "Attack on Titan",
+          "evidence": [
+            "Exact title: 進撃の巨人",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:110277",
+          "title": "Attack on Titan Final Season",
+          "evidence": [
+            "Similar title: 進撃の巨人4",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:18397",
+          "title": "Attack on Titan OVA",
+          "evidence": [
+            "Similar title: 進撃の巨人 OVA",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:119113",
+          "title": "Attack on Titan ~Chronicle~",
+          "evidence": [
+            "Similar title: 進撃の巨人 〜クロニクル〜",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:20958",
+          "title": "Attack on Titan Season 2",
+          "evidence": [
+            "Similar title: 進撃の巨人 Season２",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:99147",
+          "title": "Attack on Titan Season 3",
+          "evidence": [
+            "Similar title: 進撃の巨人 Season３",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:20811",
+          "title": "Attack on Titan: No Regrets",
+          "evidence": [
+            "Similar title: 進撃の巨人 外伝 悔いなき選択",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:99634",
+          "title": "Attack on Titan: Lost Girls",
+          "evidence": [
+            "Similar title: 進撃の巨人 LOST GIRLS",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:20692",
+          "title": "Attack on Titan Part II: Wings of Freedom",
+          "evidence": [
+            "Similar title: 劇場版「進撃の巨人」後編～自由の翼～",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        },
+        {
+          "id": "anilist:123078",
+          "title": "Animegatari × Shingeki no Kyojin Collab Eizou",
+          "evidence": [
+            "Similar title: 「アニメガタリ」×「進撃の巨人」コラボ映像",
+            "Available metadata: 進撃の巨人",
+            "Title clues: 進撃の巨人"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 1,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "incomplete title",
+      "query": "Fullmetal Alchem",
+      "hints": {},
+      "expected": [
+        "Fullmetal Alchemist: Brotherhood",
+        "Fullmetal Alchemist"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 1.926,
+      "sources": [
+        {
+          "id": "tvmaze",
+          "name": "TVmaze",
+          "status": "ok",
+          "count": 0
+        },
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 9
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:121",
+          "title": "Fullmetal Alchemist",
+          "evidence": [
+            "Similar title: Fullmetal Alchemist",
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:5114",
+          "title": "Fullmetal Alchemist: Brotherhood",
+          "evidence": [
+            "Similar title: 钢之炼金术师 FULLMETAL ALCHEMIST",
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:9135",
+          "title": "Fullmetal Alchemist: The Sacred Star of Milos",
+          "evidence": [
+            "Similar title: Fullmetal Alchemist Movie 2",
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:664",
+          "title": "Fullmetal Alchemist: Reflections",
+          "evidence": [
+            "Similar title: Fullmetal Alchemist: Reflections",
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:7902",
+          "title": "Fullmetal Alchemist: Brotherhood: 4-Koma Theater",
+          "evidence": [
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:6421",
+          "title": "Fullmetal Alchemist: Brotherhood OVA Collection",
+          "evidence": [
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:430",
+          "title": "Fullmetal Alchemist: The Movie - Conqueror of Shamballa",
+          "evidence": [
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:10842",
+          "title": "Hagane no Renkinjutsushi: Milos no Seinaru Hoshi Tokubetsu Eizou",
+          "evidence": [
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        },
+        {
+          "id": "anilist:908",
+          "title": "Fullmetal Alchemist: Premium OVA Collection",
+          "evidence": [
+            "Available metadata: fullmetal",
+            "Title clues: fullmetal"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 1,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "named character",
+      "query": "Kakashi Hatake",
+      "hints": {
+        "category": "anime",
+        "character": "Kakashi Hatake"
+      },
+      "expected": [
+        "Naruto",
+        "Naruto: Shippuden"
+      ],
+      "cold_live_rank": 2,
+      "seconds": 2.029,
+      "sources": [
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 8
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:97938",
+          "title": "Boruto: Naruto Next Generations",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:20",
+          "title": "Naruto",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:1735",
+          "title": "Naruto: Shippuden",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:2472",
+          "title": "Naruto Shippuden the Movie",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:10589",
+          "title": "Naruto Shippuden the Movie: Blood Prison",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:8246",
+          "title": "Naruto Shippuden the Movie: The Lost Tower",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:13667",
+          "title": "Road to Ninja: Naruto the Movie",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        },
+        {
+          "id": "anilist:16870",
+          "title": "The Last: Naruto the Movie",
+          "evidence": [
+            "Character: Kakashi Hatake"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 252,
+      "v4_same_corpus_rank": 3
+    },
+    {
+      "case": "character appearance",
+      "query": "Anime with a white-haired teacher who covers one eye",
+      "hints": {},
+      "expected": [
+        "Naruto",
+        "Naruto: Shippuden"
+      ],
+      "cold_live_rank": 29,
+      "seconds": 5.857,
+      "sources": [
+        {
+          "id": "encyclopedia",
+          "name": "Wikipedia + Wikidata",
+          "status": "ok",
+          "count": 2
+        },
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 656
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "encyclopedia:Q1088263",
+          "title": "Naruto universe",
+          "evidence": [
+            "Available metadata: cover, teacher",
+            "Character Kakashi Hatake: cover, teacher",
+            "Wikipedia article: Kakashi Hatake",
+            "Wikidata links this character to Naruto universe"
+          ]
+        },
+        {
+          "id": "anilist:6421",
+          "title": "Fullmetal Alchemist: Brotherhood OVA Collection",
+          "evidence": [
+            "Available metadata: hair, teacher",
+            "Related terms: sensei"
+          ]
+        },
+        {
+          "id": "anilist:100049",
+          "title": "Re:ZERO -Starting Life in Another World- OVAs",
+          "evidence": [
+            "Available metadata: cover, hair",
+            "Related terms: silver",
+            "Character Rem: cover, eye, hair"
+          ]
+        },
+        {
+          "id": "anilist:21355",
+          "title": "Re:ZERO -Starting Life in Another World-",
+          "evidence": [
+            "Available metadata: hair",
+            "Related terms: silver",
+            "Character Rem: cover, eye, hair"
+          ]
+        },
+        {
+          "id": "anilist:100240",
+          "title": "Tokyo Ghoul:re",
+          "evidence": [
+            "Available metadata: eye",
+            "Related terms: leader",
+            "Character Ken Kaneki: eye, white"
+          ]
+        },
+        {
+          "id": "anilist:108632",
+          "title": "Re:ZERO -Starting Life in Another World- Season 2",
+          "evidence": [
+            "Available metadata: white",
+            "Character Rem: cover, eye, hair"
+          ]
+        },
+        {
+          "id": "anilist:20850",
+          "title": "Tokyo Ghoul √A",
+          "evidence": [
+            "Available metadata: eye",
+            "Character Ken Kaneki: eye, white"
+          ]
+        },
+        {
+          "id": "anilist:15417",
+          "title": "Gintama Season 2 Part 2",
+          "evidence": [
+            "Available metadata: hair",
+            "Related terms: leader",
+            "Character Gintoki Sakata: hair, white"
+          ]
+        },
+        {
+          "id": "anilist:102351",
+          "title": "Tokyo Ghoul:re 2",
+          "evidence": [
+            "Related terms: leader, mentor",
+            "Character Ken Kaneki: eye, white"
+          ]
+        },
+        {
+          "id": "anilist:97889",
+          "title": "Gintama Season 4",
+          "evidence": [
+            "Available metadata: teacher",
+            "Related terms: leader",
+            "Character Gintoki Sakata: hair, white"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 50,
+      "v4_same_corpus_rank": 40
+    },
+    {
+      "case": "actor and setting",
+      "query": "An old action movie with Jackie Chan where he fights criminals in a city",
+      "hints": {},
+      "expected": [
+        "Police Story",
+        "Rush Hour",
+        "Rumble in the Bronx",
+        "Police Story 2"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 2.238,
+      "sources": [
+        {
+          "id": "encyclopedia",
+          "name": "Wikipedia + Wikidata",
+          "status": "ok",
+          "count": 11
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "encyclopedia:Q594033",
+          "title": "Police Story",
+          "evidence": [
+            "Available metadata: action, chan, fight, jackie",
+            "Related terms: police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Police Story (1985 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q863762",
+          "title": "New Police Story",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: gang, police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: New Police Story",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q4332248",
+          "title": "Naughty Boys",
+          "evidence": [
+            "Available metadata: chan, jackie",
+            "Related terms: crime, gang",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Naughty Boys (film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1585023",
+          "title": "Crime Story",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: crime, police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Crime Story (1993 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1851982",
+          "title": "Miracles",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: crime",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Miracles (1989 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q378013",
+          "title": "Police Story 2",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Title clues: chan, jackie",
+            "Related terms: police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Police Story 2",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1322844",
+          "title": "Rob-B-Hood",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Rob-B-Hood",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q847530",
+          "title": "Who Am I?",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Who Am I? (1998 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q777464",
+          "title": "Jackie Chan Adventures",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Title clues: chan, jackie",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Jackie Chan Adventures",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q391143",
+          "title": "CZ12",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Actor: Jackie Chan",
+            "Wikipedia article: CZ12",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 2,
+      "v4_same_corpus_rank": 2
+    },
+    {
+      "case": "partial plot",
+      "query": "Anime about a student with a notebook that kills people whose names he writes",
+      "hints": {},
+      "expected": [
+        "Death Note"
+      ],
+      "cold_live_rank": 3,
+      "seconds": 0.883,
+      "sources": [
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 50
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:16592",
+          "title": "Danganronpa: The Animation",
+          "evidence": [
+            "Available metadata: kill, student",
+            "Title clues: student",
+            "Related terms: academy, murder, school",
+            "Character Kyouko Kirigiri: kill, student",
+            "Character Sayaka Maizono: kill, student",
+            "Character Makoto Naegi: kill, student",
+            "Character Junko Enoshima: kill, student",
+            "Character Celestia Ludenberg: kill, name, student",
+            "Character Touko Fukawa: kill, student",
+            "Character Aoi Asahina: kill, name, student",
+            "Character Yasuhiro Hagakure: kill, student",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:10620",
+          "title": "The Future Diary",
+          "evidence": [
+            "Available metadata: write",
+            "Related terms: diary, written",
+            "Character Yukiteru Amano: kill, name, student, write",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:1535",
+          "title": "Death Note",
+          "evidence": [
+            "Available metadata: student",
+            "Related terms: book, death, notepad, pen, school",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:98314",
+          "title": "Kakegurui",
+          "evidence": [
+            "Available metadata: student",
+            "Related terms: academy, book, school",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:161645",
+          "title": "The Apothecary Diaries",
+          "evidence": [
+            "Available metadata: name",
+            "Related terms: diary",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:21234",
+          "title": "ERASED",
+          "evidence": [
+            "Available metadata: name",
+            "Related terms: death",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:11111",
+          "title": "Another",
+          "evidence": [
+            "Available metadata: student",
+            "Related terms: school",
+            "Character Izumi Akazawa: kill, student",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:100876",
+          "title": "Kakegurui xx",
+          "evidence": [
+            "Available metadata: student",
+            "Related terms: academy",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:20829",
+          "title": "Seraph of the End: Vampire Reign",
+          "evidence": [
+            "Available metadata: kill",
+            "Genre: Mystery"
+          ]
+        },
+        {
+          "id": "anilist:108463",
+          "title": "Toilet-bound Hanako-kun",
+          "evidence": [
+            "Related terms: academy, school",
+            "Character Hanako: kill, name, student",
+            "Character Sousuke Mitsuba: name, student",
+            "Genre: Mystery"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 15,
+      "v4_same_corpus_rank": 2
+    },
+    {
+      "case": "ambiguous scene",
+      "query": "A movie where people discover an underground cave and encounter dangerous creatures",
+      "hints": {},
+      "expected": [
+        "The Descent",
+        "The Cave"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 1.013,
+      "sources": [
+        {
+          "id": "encyclopedia",
+          "name": "Wikipedia + Wikidata",
+          "status": "ok",
+          "count": 6
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "encyclopedia:Q1027834",
+          "title": "The Cave",
+          "evidence": [
+            "Available metadata: cave, creature",
+            "Title clues: cave",
+            "Related terms: descent, monster",
+            "Wikipedia article: The Cave (2005 film)"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1367317",
+          "title": "The Descent",
+          "evidence": [
+            "Available metadata: cave, creature, dangerou",
+            "Related terms: descent",
+            "Wikipedia article: The Descent"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q925384",
+          "title": "Reign of Fire",
+          "evidence": [
+            "Available metadata: creature, underground",
+            "Related terms: beast, monster",
+            "Wikipedia article: Reign of Fire (film)"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q429934",
+          "title": "Pitch Black",
+          "evidence": [
+            "Available metadata: creature, dangerou",
+            "Wikipedia article: Pitch Black (film)"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q5183620",
+          "title": "Creature",
+          "evidence": [
+            "Available metadata: creature",
+            "Title clues: creature",
+            "Related terms: monster",
+            "Wikipedia article: Creature (2011 film)"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q12481108",
+          "title": "Dead Mine",
+          "evidence": [
+            "Wikipedia article: Dead Mine"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 1,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "incorrect period",
+      "query": "Anime where a boy trains as a ninja with a demon sealed inside him from the 1980s",
+      "hints": {},
+      "expected": [
+        "Naruto",
+        "Naruto: Shippuden"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 1.19,
+      "sources": [
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 50
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:20",
+          "title": "Naruto",
+          "evidence": [
+            "Available metadata: demon, inside, ninja, seal",
+            "Related terms: beast",
+            "Character Naruto Uzumaki: demon, inside, ninja, seal",
+            "Character Kakashi Hatake: ninja, train",
+            "Character Sakura Haruno: ninja, train",
+            "Character Zabuza Momochi: boy, demon, ninja",
+            "Genre: Action",
+            "Released 2002; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:112151",
+          "title": "Demon Slayer -Kimetsu no Yaiba- The Movie: Mugen Train",
+          "evidence": [
+            "Available metadata: demon, train",
+            "Title clues: demon, train",
+            "Character Enmu: demon, train",
+            "Genre: Action",
+            "Released 2020; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:9919",
+          "title": "Blue Exorcist",
+          "evidence": [
+            "Available metadata: demon",
+            "Related terms: possess",
+            "Character Rin Okumura: demon, seal",
+            "Character Shiemi Moriyama: demon, inside",
+            "Genre: Action",
+            "Released 2011; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:104578",
+          "title": "Attack on Titan Season 3 Part 2",
+          "evidence": [
+            "Available metadata: seal",
+            "Related terms: beast",
+            "Character Armin Arlert: boy, train",
+            "Genre: Action",
+            "Released 2019; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:101922",
+          "title": "Demon Slayer: Kimetsu no Yaiba",
+          "evidence": [
+            "Available metadata: boy, demon",
+            "Title clues: demon",
+            "Genre: Action",
+            "Released 2019; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:20623",
+          "title": "Parasyte -the maxim-",
+          "evidence": [
+            "Available metadata: demon",
+            "Related terms: creature, host",
+            "Genre: Action",
+            "Released 2014; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:142329",
+          "title": "Demon Slayer: Kimetsu no Yaiba Entertainment District Arc",
+          "evidence": [
+            "Available metadata: demon",
+            "Title clues: demon",
+            "Related terms: creature",
+            "Genre: Action",
+            "Released 2021; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:11061",
+          "title": "Hunter x Hunter (2011)",
+          "evidence": [
+            "Available metadata: boy",
+            "Related terms: young",
+            "Character Killua Zoldyck: boy, train",
+            "Genre: Action",
+            "Released 2011; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:100166",
+          "title": "My Hero Academia Season 3",
+          "evidence": [
+            "Available metadata: train",
+            "Genre: Action",
+            "Released 2018; differs from the remembered period"
+          ]
+        },
+        {
+          "id": "anilist:97668",
+          "title": "One-Punch Man Season 2",
+          "evidence": [
+            "Available metadata: train",
+            "Related terms: monster",
+            "Genre: Action",
+            "Released 2019; differs from the remembered period"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 1,
+      "v4_same_corpus_rank": 1
+    },
+    {
+      "case": "combined clues",
+      "query": "Animated show about brothers who use alchemy after trying to restore their mother",
+      "hints": {},
+      "expected": [
+        "Fullmetal Alchemist: Brotherhood",
+        "Fullmetal Alchemist"
+      ],
+      "cold_live_rank": 1,
+      "seconds": 1.857,
+      "sources": [
+        {
+          "id": "anilist",
+          "name": "AniList",
+          "status": "ok",
+          "count": 50
+        }
+      ],
+      "top_ten": [
+        {
+          "id": "anilist:5114",
+          "title": "Fullmetal Alchemist: Brotherhood",
+          "evidence": [
+            "Available metadata: after, alchemy, broth",
+            "Character Edward Elric: alchemy, mother, use",
+            "Character Winry Rockbell: broth, mother",
+            "Character Pinako Rockbell: after, mother",
+            "Character Izumi Curtis: after, alchemy, broth, mother, use"
+          ]
+        },
+        {
+          "id": "anilist:1735",
+          "title": "Naruto: Shippuden",
+          "evidence": [
+            "Available metadata: after, animat",
+            "Character Sasuke Uchiha: after, use",
+            "Character Sakura Haruno: after, use"
+          ]
+        },
+        {
+          "id": "anilist:20665",
+          "title": "Your lie in April",
+          "evidence": [
+            "Available metadata: after, mother",
+            "Character Tsubaki Sawabe: after, mother"
+          ]
+        },
+        {
+          "id": "anilist:20789",
+          "title": "The Seven Deadly Sins",
+          "evidence": [
+            "Available metadata: trying"
+          ]
+        },
+        {
+          "id": "anilist:16498",
+          "title": "Attack on Titan",
+          "evidence": [
+            "Available metadata: mother",
+            "Character Mikasa Ackerman: after, mother",
+            "Character Sasha Blouse: after, mother"
+          ]
+        },
+        {
+          "id": "anilist:1535",
+          "title": "Death Note",
+          "evidence": [
+            "Available metadata: use"
+          ]
+        },
+        {
+          "id": "anilist:20954",
+          "title": "A Silent Voice",
+          "evidence": [
+            "Available metadata: after",
+            "Character Miyako Ishida: after, mother, trying",
+            "Character Maria Ishida: after, mother",
+            "Character Satoshi Mashiba: after, trying"
+          ]
+        },
+        {
+          "id": "anilist:21459",
+          "title": "My Hero Academia",
+          "evidence": [
+            "Available metadata: use"
+          ]
+        },
+        {
+          "id": "anilist:20958",
+          "title": "Attack on Titan Season 2",
+          "evidence": [
+            "Available metadata: after",
+            "Character Mikasa Ackerman: after, mother",
+            "Character Sasha Blouse: after, mother"
+          ]
+        },
+        {
+          "id": "anilist:20447",
+          "title": "Noragami",
+          "evidence": [
+            "Available metadata: after"
+          ]
+        }
+      ],
+      "v3_same_corpus_rank": 2,
+      "v4_same_corpus_rank": 1
+    }
+  ],
+  "evaluated_commit": "aaadb44a1c22b97073edfa68c6be24cad01d2411",
+  "workflow": "https://github.com/x-Key-l/scrapper/actions/runs/41982914840"
+}

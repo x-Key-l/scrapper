@@ -58,7 +58,7 @@ async function run() {
         console.log('Pokémon TV: alternate title, three publisher episodes, exact episode handoff, official embed exposed=' + Boolean(embed));
         await page.getByRole('button', {name: 'Close dialog'}).click();
 
-        await page.getByRole('button', {name: 'Universal Video Search', exact: true}).click();
+        await page.getByRole('button', {name: 'Quick Search', exact: true}).click();
         await page.locator('#watch-source').selectOption('open-animation');
         await page.getByRole('textbox', {name: 'Video search'}).fill('Caminandes');
         await page.getByRole('button', {name: 'Search', exact: true}).click();
@@ -89,6 +89,8 @@ async function run() {
         }
         await page.getByLabel('Speed', {exact: true}).selectOption('1.25');
         assert.equal(await video.evaluate(element => element.playbackRate), 1.25);
+        await video.evaluate(element => { element.currentTime = 8; });
+        await page.waitForFunction(() => document.querySelector('#episode-video').currentTime > 8.25, null, {timeout:20000});
         await page.screenshot({path: 'artifacts/caminandes-playing.png', fullPage: true});
         await page.getByText('Download this video', {exact: true}).waitFor();
         assert.deepEqual(errors, []);
@@ -109,8 +111,9 @@ async function run() {
         await page.screenshot({path: 'artifacts/website-test.png', fullPage: true});
         await page.getByRole('button', {name: 'Save website', exact: true}).click();
         await page.getByRole('heading', {name: 'W3Schools video example', exact: true}).waitFor();
-        await page.getByRole('button', {name: 'Universal Video Search', exact: true}).click();
-        await page.locator('#watch-source').selectOption({label: 'W3Schools video example'});
+        await page.getByRole('button', {name: 'Quick Search', exact: true}).click();
+        try {await page.locator('#watch-source').selectOption({label: 'W3Schools video example'}, {timeout:10000});}
+        catch (error) {console.log('Saved source diagnosis', await page.evaluate(()=>state.data.sources.map(s=>({name:s.name,enabled:s.enabled,role:s.role,categories:s.categories}))));throw error;}
         await page.getByRole('textbox', {name: 'Video search'}).fill('HTML Video');
         await page.getByRole('button', {name: 'Search', exact: true}).click();
         await page.getByRole('button', {name: 'View video options'}).click();
@@ -123,19 +126,19 @@ async function run() {
         await page.screenshot({path: 'artifacts/added-website-playing.png', fullPage: true});
         console.log('W3Schools: inspected, tested, saved, searched, and played a real HTML video without a media URL or API.');
         await page.getByRole('button', {name: 'Close dialog'}).click();
-        await page.getByRole('button', {name: 'Memory Search', exact: true}).click();
+        await page.getByRole('button', {name: 'Deep Search', exact: true}).click();
         await page.getByRole('textbox', {name: 'Describe the video you remember'}).fill('llama Patagonia');
-        const chips = page.locator('[data-source]');
+        await page.getByText('Optional clues and source selection', {exact:true}).click();
+        const chips = page.locator('[data-deep-source]');
         for (let i = 0; i < await chips.count(); i++) {
             const chip = chips.nth(i);
-            if (await chip.getAttribute('data-source') !== 'open-animation') await chip.uncheck();
+            if (await chip.getAttribute('value') !== 'open-animation') await chip.uncheck();
         }
-        await page.getByRole('button', {name: /Follow the clues/}).click();
+        await page.getByRole('button', {name: 'Search deeply', exact: true}).click();
         await page.getByRole('heading', {name: 'Caminandes', exact: true}).waitFor();
-        await page.getByRole('button', {name: 'Details', exact: true}).click();
-        await page.getByRole('button', {name: /Find Video/i}).click();
+        await page.getByRole('button', {name: 'View video options', exact: true}).click();
         await page.getByRole('button', {name: /Episode 3 · Llamigos/}).waitFor();
-        console.log('Memory Search: plot clues found Caminandes and led to the real episode list.');
+        console.log('Deep Search: plot clues found Caminandes and led to the real episode list.');
         assert.deepEqual(errors, []);
     } finally {
         if (browser) await browser.close();
