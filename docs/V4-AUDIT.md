@@ -39,6 +39,8 @@ HiAnime's exact tested first episode is `https://hianime.ms/watch-naruto-episode
 
 The fixed evaluation has eleven known-answer examples: exact title, typo, Japanese title, incomplete title, named character, appearance, actor/setting, partial plot, ambiguous scene, wrong period and combined clues. Each live case starts with an empty local index. A separate comparison runs old/new ranking over the same real candidates collected from those cases. It is a small curated regression set, not general-purpose accuracy.
 
+The 5 November 2026 live run found the expected title in the top five and top ten for **10 of 11 cases**. On identical provider candidates, v3 ranked **7 of 11** in each cutoff and v4 ranked **10 of 11**. Live case latency was **0.714–5.857 seconds**, excluding subsequent video-website resolution. The white-haired teacher query identified **Naruto universe** first, but the exact Naruto catalog entry ranked 29th; this case remains a miss under the fixed scoring rule. No answer was renamed or silently counted as correct.
+
 The latest retained evaluation and exact case ranks are in [deep-evaluation.json](deep-evaluation.json). Results and candidate coverage are reported separately. Optional TMDB actor lookup is implemented but live token-dependent filmography has not been verified without owner credentials. Metadata results do not count as available videos.
 
 ## Performance measurements
@@ -72,6 +74,8 @@ For context, v3 in a fresh system Edge instance measured 3.196 s browser-ready, 
 ## Release verification and limits
 
 Automated tests include real local HTTP transfers and actual FFmpeg/yt-dlp execution. Windows CI additionally launches the packaged executable, verifies profile migration/restart, navigates WebView2, tests back/forward/reload/find, lazy tabs, bookmarks, failed navigation, an actual renderer crash/recovery, local API isolation and real video frames. Browser E2E covers adding and searching a website, exact episode handoff, direct playback and history deletion/undo. Screenshots are captured from running applications.
+
+Local verification: 90 full-suite tests passed, followed by the new partial-source regression passing in the 20-test affected subset. Final CI reports contain the complete 91-test run.
 
 The release ZIP includes `BUILD.json`, provider and viewing reports, native cold/warm results and this audit. Source-provider reports may record outages without failing unrelated sources; build, local functional, native and real viewing gates must pass before publication.
 

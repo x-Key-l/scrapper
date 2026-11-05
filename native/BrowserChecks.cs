@@ -144,8 +144,23 @@ namespace SceneTrace
                 await WaitFor(appTab, "document.body.innerText.includes('Deep Search')");
                 checks.Add("Browser action returns to SceneTrace search");
                 measurements.Add(BrowserMemory("After website playback"));
+                object websiteCheck;
+                try
+                {
+                    tabs.SelectedTab = tab.Page;
+                    tab.View.CoreWebView2.Navigate("https://hianime.ms/search?q=Naruto");
+                    await WaitFor(tab, "location.hostname === 'hianime.ms' && document.querySelectorAll('a[href*=\"/details/naruto-\"]').length>0", 25000);
+                    await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelector('a[href*=\"/details/naruto-\"]').click()");
+                    await WaitFor(tab, "document.querySelectorAll('.hk-epgrid a.hk-ep[data-ep]').length>0", 25000);
+                    int count = Int32.Parse(await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelectorAll('.hk-epgrid a.hk-ep[data-ep]').length"));
+                    websiteCheck = new { source = "HiAnime", browsing = "Actual WebView2 search-to-detail navigation passed", episode_links = count, playback = "Unverified", download = "Unverified" };
+                }
+                catch (Exception error)
+                {
+                    websiteCheck = new { source = "HiAnime", browsing = "Unverified on this run", reason = error.Message, playback = "Unverified", download = "Unverified" };
+                }
                 File.WriteAllText(reportPath, json.Serialize(new { success = true, runtime = environment.BrowserVersionString,
-                    app_ready_seconds = Math.Round(appReady, 3), checks, measurements,
+                    app_ready_seconds = Math.Round(appReady, 3), checks, measurements, websiteCheck,
                     scope = "Actual packaged WinForms WebView2 host on Windows CI. Memory includes the host and shared WebView2 processes, backend measured separately." }));
                 Environment.ExitCode = 0;
                 Close();

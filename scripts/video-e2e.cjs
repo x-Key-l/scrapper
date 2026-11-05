@@ -89,6 +89,8 @@ async function run() {
         }
         await page.getByLabel('Speed', {exact: true}).selectOption('1.25');
         assert.equal(await video.evaluate(element => element.playbackRate), 1.25);
+        await video.evaluate(element => { element.currentTime = 8; });
+        await page.waitForFunction(() => document.querySelector('#episode-video').currentTime > 8.25, null, {timeout:20000});
         await page.screenshot({path: 'artifacts/caminandes-playing.png', fullPage: true});
         await page.getByText('Download this video', {exact: true}).waitFor();
         assert.deepEqual(errors, []);

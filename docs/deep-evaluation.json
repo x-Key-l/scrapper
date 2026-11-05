@@ -1,21 +1,21 @@
 {
   "scope": "Eleven fixed examples, not a general accuracy claim. Cold live tests use an empty local index per case. Paired ranking uses identical real provider candidates collected across these cases.",
   "baseline_revision": "5383d468d3ce0fe2c21e2b86f80636399707869b",
-  "corpus_records": 430,
+  "corpus_records": 435,
   "summary": {
     "cold_live_rank": {
-      "top_5": 9,
-      "top_10": 9,
+      "top_5": 10,
+      "top_10": 10,
       "cases": 11
     },
     "v3_same_corpus_rank": {
-      "top_5": 6,
-      "top_10": 6,
+      "top_5": 7,
+      "top_10": 7,
       "cases": 11
     },
     "v4_same_corpus_rank": {
-      "top_5": 9,
-      "top_10": 9,
+      "top_5": 10,
+      "top_10": 10,
       "cases": 11
     }
   },
@@ -28,7 +28,7 @@
         "Naruto"
       ],
       "cold_live_rank": 1,
-      "seconds": 0.599,
+      "seconds": 0.714,
       "sources": [
         {
           "id": "anilist",
@@ -146,7 +146,7 @@
         "Naruto"
       ],
       "cold_live_rank": 1,
-      "seconds": 1.468,
+      "seconds": 1.475,
       "sources": [
         {
           "id": "tvmaze",
@@ -233,7 +233,7 @@
           ]
         }
       ],
-      "v3_same_corpus_rank": 260,
+      "v3_same_corpus_rank": 259,
       "v4_same_corpus_rank": 1
     },
     {
@@ -245,7 +245,7 @@
         "Shingeki no Kyojin"
       ],
       "cold_live_rank": 1,
-      "seconds": 2.138,
+      "seconds": 2.162,
       "sources": [
         {
           "id": "tvmaze",
@@ -364,7 +364,7 @@
         "Fullmetal Alchemist"
       ],
       "cold_live_rank": 1,
-      "seconds": 1.884,
+      "seconds": 1.926,
       "sources": [
         {
           "id": "tvmaze",
@@ -472,7 +472,7 @@
         "Naruto: Shippuden"
       ],
       "cold_live_rank": 2,
-      "seconds": 1.975,
+      "seconds": 2.029,
       "sources": [
         {
           "id": "anilist",
@@ -539,7 +539,7 @@
           ]
         }
       ],
-      "v3_same_corpus_rank": 253,
+      "v3_same_corpus_rank": 252,
       "v4_same_corpus_rank": 3
     },
     {
@@ -551,13 +551,13 @@
         "Naruto: Shippuden"
       ],
       "cold_live_rank": 29,
-      "seconds": 6.703,
+      "seconds": 5.857,
       "sources": [
         {
           "id": "encyclopedia",
           "name": "Wikipedia + Wikidata",
           "status": "ok",
-          "count": 3
+          "count": 2
         },
         {
           "id": "anilist",
@@ -655,7 +655,7 @@
           ]
         }
       ],
-      "v3_same_corpus_rank": 51,
+      "v3_same_corpus_rank": 50,
       "v4_same_corpus_rank": 40
     },
     {
@@ -668,26 +668,58 @@
         "Rumble in the Bronx",
         "Police Story 2"
       ],
-      "cold_live_rank": null,
-      "seconds": 1.459,
+      "cold_live_rank": 1,
+      "seconds": 2.238,
       "sources": [
         {
           "id": "encyclopedia",
           "name": "Wikipedia + Wikidata",
           "status": "ok",
-          "count": 5
+          "count": 11
         }
       ],
       "top_ten": [
         {
-          "id": "encyclopedia:Q1999059",
-          "title": "Jackie Chan: My Stunts",
+          "id": "encyclopedia:Q594033",
+          "title": "Police Story",
           "evidence": [
-            "Available metadata: chan, fight, jackie",
-            "Title clues: chan, jackie",
+            "Available metadata: action, chan, fight, jackie",
             "Related terms: police",
             "Actor: Jackie Chan",
-            "Wikipedia article: Jackie Chan: My Stunts",
+            "Wikipedia article: Police Story (1985 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q863762",
+          "title": "New Police Story",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: gang, police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: New Police Story",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q4332248",
+          "title": "Naughty Boys",
+          "evidence": [
+            "Available metadata: chan, jackie",
+            "Related terms: crime, gang",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Naughty Boys (film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1585023",
+          "title": "Crime Story",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: crime, police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Crime Story (1993 film)",
             "Cast credit in Wikidata: Jackie Chan"
           ]
         },
@@ -699,6 +731,29 @@
             "Related terms: crime",
             "Actor: Jackie Chan",
             "Wikipedia article: Miracles (1989 film)",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q378013",
+          "title": "Police Story 2",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Title clues: chan, jackie",
+            "Related terms: police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Police Story 2",
+            "Cast credit in Wikidata: Jackie Chan"
+          ]
+        },
+        {
+          "id": "encyclopedia:Q1322844",
+          "title": "Rob-B-Hood",
+          "evidence": [
+            "Available metadata: action, chan, jackie",
+            "Related terms: police",
+            "Actor: Jackie Chan",
+            "Wikipedia article: Rob-B-Hood",
             "Cast credit in Wikidata: Jackie Chan"
           ]
         },
@@ -734,8 +789,8 @@
           ]
         }
       ],
-      "v3_same_corpus_rank": null,
-      "v4_same_corpus_rank": null
+      "v3_same_corpus_rank": 2,
+      "v4_same_corpus_rank": 2
     },
     {
       "case": "partial plot",
@@ -745,7 +800,7 @@
         "Death Note"
       ],
       "cold_live_rank": 3,
-      "seconds": 0.94,
+      "seconds": 0.883,
       "sources": [
         {
           "id": "anilist",
@@ -869,7 +924,7 @@
         "The Cave"
       ],
       "cold_live_rank": 1,
-      "seconds": 0.965,
+      "seconds": 1.013,
       "sources": [
         {
           "id": "encyclopedia",
@@ -945,7 +1000,7 @@
         "Naruto: Shippuden"
       ],
       "cold_live_rank": 1,
-      "seconds": 1.284,
+      "seconds": 1.19,
       "sources": [
         {
           "id": "anilist",
@@ -1077,7 +1132,7 @@
         "Fullmetal Alchemist"
       ],
       "cold_live_rank": 1,
-      "seconds": 2.016,
+      "seconds": 1.857,
       "sources": [
         {
           "id": "anilist",
@@ -1176,6 +1231,6 @@
       "v4_same_corpus_rank": 1
     }
   ],
-  "evaluated_commit": "f7127ce163f2f0e0a7c4e10c70b61e06d9c72648",
-  "workflow": "https://github.com/x-Key-l/scrapper/actions/runs/41981916124"
+  "evaluated_commit": "aaadb44a1c22b97073edfa68c6be24cad01d2411",
+  "workflow": "https://github.com/x-Key-l/scrapper/actions/runs/41982914840"
 }

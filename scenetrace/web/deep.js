@@ -50,7 +50,7 @@ function deepResults() {
                 esc(m.source_name + ' · ' + m.title) + '</button>').join('') +
             '<div class="card-actions"><button class="primary" data-deep="view" data-index="' + i + '">' + (video ? 'View video options' : 'Find viewing options') +
             '</button><button data-deep="exclude" data-index="' + i + '">Not this one</button></div>' +
-            (r.source_id === 'itunes' ? '<p class="meta">' + external(r.url, 'View movie on Apple TV') + '</p>' : '') + '</div></article>';
+            '<p class="meta">' + external(r.url, 'Source evidence') + (r.license ? '<br>' + esc(r.license) : '') + '</p>' + '</div></article>';
     }).join('') + '</div>' + (!rows.length && deepState.query && !deepState.busy ? empty('No candidates found',
         'Add another clue or connect a catalog with descriptions. Source errors are listed below.') : '') +
         (deepState.more && !deepState.busy ? '<button data-deep="more">Search next catalog page</button>' : '') +
