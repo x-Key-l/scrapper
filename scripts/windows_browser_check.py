@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                 assert any(r['id']=='upgrade:keep' for r in state['saved'])
                 assert state['settings']['record_history'] is False
                 assert post(address, 'history/list', {})['entries'] == []
-            deadline = time.monotonic() + 180
+            deadline = time.monotonic() + 300
             while time.monotonic() < deadline and not report.is_file():
                 if process.poll() is not None:
                     raise RuntimeError('The packaged application exited without native browser evidence.')

@@ -252,9 +252,9 @@ namespace SceneTrace
                 core.NewWindowRequested += (s, e) => { e.Handled = true; Open(e.Uri, true); };
                 core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Deny; };
                 core.DownloadStarting += (s, e) => {
-                    if (tab.Trusted) return;
-                    e.Cancel = true;
-                    SendToApp("inspect", e.DownloadOperation.Uri);
+                    // A website download is independent of media extraction. Let
+                    // WebView2 handle the transfer and its ordinary download UI.
+                    status.Text = "Download started: " + Path.GetFileName(e.ResultFilePath);
                 };
                 core.NavigationStarting += (s, e) => {
                     bool allowed = tab.Trusted ? IsApp(e.Uri) : AllowedWebsite(e.Uri);
