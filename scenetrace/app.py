@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
+from .library import MediaLibrary
 from .viewing import Viewing
 from .search import SearchEngine
 from .sessions import SearchSessions
@@ -28,7 +29,8 @@ class App:
         self.proxy = proxy
         self.search = SearchEngine(self.store)
         self.search_sessions = SearchSessions(self)
-        self.downloads = DownloadManager(self.store, proxy)
+        self.library = MediaLibrary(self.store)
+        self.downloads = DownloadManager(self.store, proxy, completed=self.library.completed)
         self.analyses = {}
         self.viewing = Viewing(self)
         self.desktop_token = secrets.token_urlsafe(32)
@@ -49,6 +51,8 @@ class App:
                     settings={'destination':self.store.setting('destination',str(self.folder)), 'onboarded':self.store.setting('onboarded',False),
                               'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path()),
                               'native_browser':self.native_browser,
+                              'organize_by_source':self.store.setting('organize_by_source',True),
+                              'organize_by_series':self.store.setting('organize_by_series',False),
                               'record_history':self.store.setting('record_history', True),
                               'record_browsing':self.store.setting('record_browsing', True),
                               'history_retention_days':self.store.setting('history_retention_days', 0)})
@@ -214,7 +218,7 @@ class App:
         return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
 
     def settings(self, body):
-        for key in ('record_history', 'record_browsing'):
+        for key in ('record_history', 'record_browsing','organize_by_source','organize_by_series'):
             if key in body:
                 if not isinstance(body[key], bool):
                     raise ValueError('History recording must be enabled or disabled.')
@@ -295,6 +299,31 @@ class App:
 
     def call(self, path, body):
         if path=='/api/state': return self.state()
+        if path=='/api/desktop/downloads': return self.downloads.browser_sync(body.get('updates',[]))
+        if path=='/api/desktop/download-settings':
+            return {'destination':self.store.setting('destination',str(self.folder)),
+                    'organize_by_source':self.store.setting('organize_by_source',True)}
+        if path=='/api/library/list': return self.library.listing(body.get('query',''),body.get('offset',0))
+        if path=='/api/library/edit': return self.library.edit(body.get('ids'),body.get('values',{}))
+        if path=='/api/library/import':
+            return self.task('Import media folder',lambda progress:self.library.import_folder(body.get('folder',''),progress))
+        if path=='/api/library/move':
+            result=self.library.move(body.get('ids',[]),body.get('destination',''),body.get('rename',''))
+            with self.downloads.lock:
+                for item in result['items']:
+                    job=self.downloads.items.get(item.get('job_id'))
+                    if job: job.update(path=item['path'],destination=str(Path(item['path']).parent))
+            return result
+        if path=='/api/library/open':
+            item=self.library.get(body.get('id'))
+            file=Path(item['path'])
+            if not file.is_file(): raise ValueError('The file is missing. Reconnect its drive or import its new location.')
+            target=str(file.parent if body.get('folder') else file)
+            if os.name=='nt': os.startfile(target)
+            else:
+                import subprocess
+                subprocess.Popen(['open' if platform.system()=='Darwin' else 'xdg-open',target])
+            return {'ok':True}
         if path=='/api/deep/start': return self.search_sessions.start(body)
         if path=='/api/deep/poll': return self.search_sessions.poll(body.get('id'))
         if path=='/api/deep/cancel': return self.search_sessions.cancel(body.get('id'))

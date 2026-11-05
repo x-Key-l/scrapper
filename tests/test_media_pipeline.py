@@ -169,3 +169,53 @@ def test_yt_dlp_merges_separate_authorized_http_tracks(tmp_path, fixture_video, 
         host.server_close()
         proxy.shutdown()
         proxy.server_close()
+
+
+@pytest.mark.parametrize('container', ['hls', 'dash'])
+def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, container):
+    """Real FFmpeg manifests, real HTTP segments, real yt-dlp child, actual decode."""
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler
+    folder = tmp_path/'server'
+    folder.mkdir()
+    manifest = folder/('index.m3u8' if container == 'hls' else 'index.mpd')
+    args = [media.ffmpeg_path(), '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
+            'testsrc2=s=96x64:r=10', '-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=22050',
+            '-t', '2', '-c:v', 'libx264', '-g', '10', '-c:a', 'aac']
+    args += ['-f','hls','-hls_time','1','-hls_list_size','0'] if container == 'hls' else ['-f','dash','-seg_duration','1']
+    subprocess.run(args+[str(manifest)], check=True, capture_output=True)
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, *args): pass
+    host = ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(folder)))
+    threading.Thread(target=host.serve_forever,daemon=True).start()
+    original = network.target
+    def target(value):
+        parsed=urlsplit(value)
+        if parsed.hostname=='adaptive.example': return parsed,parsed.hostname,host.server_port,'127.0.0.1'
+        return original(value)
+    monkeypatch.setattr(network,'target',target)
+    proxy=network.start_proxy()
+    manager=None
+    try:
+        proxy_url='http://127.0.0.1:'+str(proxy.server_port)
+        info=media.analyze('http://adaptive.example/'+manifest.name,proxy_url)
+        assert info['formats'], info
+        fmt=next((f for f in info['formats'] if f['video'] and f['audio']),None)
+        assert fmt,info
+        manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
+        job=manager.add(info,fmt,str(tmp_path))
+        done=wait(manager,job['id'])
+        subprocess.run([media.ffmpeg_path(),'-v','error','-i',done['path'],'-map','0:v:0','-map','0:a:0','-f','null','-'],check=True,capture_output=True,timeout=15)
+    finally:
+        if manager: manager.close()
+        proxy.shutdown();proxy.server_close();host.shutdown();host.server_close()
+
+
+def test_format_compatibility_does_not_invent_container_restrictions():
+    for protocol in ['http','https','m3u8_native','http_dash_segments']:
+        assert not media.format_issue({'ext':'mkv','protocol':protocol})
+    assert media.format_issue({'ext':'../exe','protocol':'https'})
+    assert media.format_issue({'ext':'mp4','protocol':'https','has_drm':True})
+    assert media.failure_detail('SSL: CERTIFICATE_VERIFY_FAILED')['code']=='certificate'
+    assert media.failure_detail('unrecognized extraction failure https://secret/?token=private')['code']=='extraction'
+    assert 'private' not in str(media.failure_detail('unrecognized extraction failure https://secret/?token=private'))

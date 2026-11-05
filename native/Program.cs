@@ -108,6 +108,8 @@ namespace SceneTrace
             AddMenu(actions, "Save current page", () => SendToApp("save-page"));
             AddMenu(actions, "Open in external browser", OpenExternal);
             tools.Items.Add(actions);
+            AddButton("↓", () => SelectApp("downloads"), "Download Center");
+            AddMenu(actions, "Browser downloads / Save As", () => Current?.View?.CoreWebView2?.OpenDefaultDownloadDialog());
             tools.Items.Add(find);
             find.AccessibleName = "Find text on page";
             find.KeyDown += async (s, e) => { if (e.KeyCode == Keys.Enter) { await FindText(); e.SuppressKeyPress = true; } };
@@ -132,8 +134,9 @@ namespace SceneTrace
             client.Timeout = TimeSpan.FromSeconds(15);
             var eventName = Environment.GetEnvironmentVariable("SCENETRACE_FOCUS_EVENT");
             if (!String.IsNullOrEmpty(eventName)) focusEvent = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
-            activity.Tick += (s, e) => {
+            activity.Tick += async (s, e) => {
                 if (focusEvent?.WaitOne(0) == true) { WindowState = FormWindowState.Normal; Show(); Activate(); }
+                await PumpDownloads();
             };
             Shown += async (s, e) => await StartBrowser();
             FormClosing += async (s, e) => {
@@ -177,6 +180,7 @@ namespace SceneTrace
                 tabs.SelectedTab = appTab.Page;
                 await EnsureTab(appTab);
                 await Post("desktop/event", new { action = "ready", runtime = environment.BrowserVersionString });
+                await PumpDownloads();
                 activity.Start();
                 if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")))
                     await RunChecks();
@@ -251,11 +255,7 @@ namespace SceneTrace
                 core.Settings.IsGeneralAutofillEnabled = false;
                 core.NewWindowRequested += (s, e) => { e.Handled = true; Open(e.Uri, true); };
                 core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Deny; };
-                core.DownloadStarting += (s, e) => {
-                    // A website download is independent of media extraction. Let
-                    // WebView2 handle the transfer and its ordinary download UI.
-                    status.Text = "Download started: " + Path.GetFileName(e.ResultFilePath);
-                };
+                core.DownloadStarting += (s, e) => TrackDownload(tab, e);
                 core.NavigationStarting += (s, e) => {
                     bool allowed = tab.Trusted ? IsApp(e.Uri) : AllowedWebsite(e.Uri);
                     if (!allowed)
