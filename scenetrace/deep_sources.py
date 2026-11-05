@@ -34,8 +34,10 @@ def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
     """Return provider candidates and per-operation evidence; at most three calls/provider."""
     kind = source['kind']
     endpoint = source.get('endpoint', '').rstrip('/')
+    cache_config = {k:v for k,v in source.items() if k not in
+                    ('health', 'last_sync', 'last_error', 'last_query', 'sync', 'video_checks')}
     def cached(label, operation, ttl=900):
-        key = 'deep:' + hashlib.sha256(json.dumps([source, label], sort_keys=True).encode()).hexdigest()
+        key = 'deep:' + hashlib.sha256(json.dumps([cache_config, label], sort_keys=True).encode()).hexdigest()
         result = store.cached(key, ttl=ttl)
         if result is None:
             if cancelled():
@@ -114,7 +116,7 @@ def retrieve(source, query, analysis, store, page=1, cancelled=lambda: False):
     for part in queries:
         if cancelled():
             break
-        key = 'deep-query:' + hashlib.sha256(json.dumps([source, part, page], sort_keys=True).encode()).hexdigest()
+        key = 'deep-query:' + hashlib.sha256(json.dumps([cache_config, part, page], sort_keys=True).encode()).hexdigest()
         result = store.cached(key)
         if result is None:
             rows, next_page = sources.search(source, part, page)

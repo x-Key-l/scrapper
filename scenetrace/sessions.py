@@ -105,7 +105,9 @@ class SearchSessions:
             for title in titles[:2]:
                 if self.app.search.is_cancelled(ident):
                     break
-                key = 'resolve:' + hashlib.sha256(json.dumps([site, title], sort_keys=True).encode()).hexdigest()
+                config = {k:v for k,v in site.items() if k not in
+                          ('health', 'last_sync', 'last_error', 'last_query', 'sync', 'video_checks')}
+                key = 'resolve:' + hashlib.sha256(json.dumps([config, title], sort_keys=True).encode()).hexdigest()
                 found = self.app.store.cached(key)
                 if found is None:
                     found, _ = sources.search(site, title)

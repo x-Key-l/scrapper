@@ -18,7 +18,7 @@ Only the exact application origin has the restricted native message bridge. Exte
 
 Windows HTTPS uses the Windows trust store through truststore, preserving hostname validation. A certificate rejection produces actionable diagnostics, not a verification-disable switch. Optional TMDB credentials are clearly separate from failed video-source connections.
 
-History uses stable IDs and transactional deletion; undo tokens expire after 60 seconds. Tests cover migration, persistence, selection, retention, recording disabled and separation from saved data. Bounded search sessions stream per-source results, preserve received results on cancellation, cache provider queries and report individual failures. No embedding model is downloaded automatically.
+History uses stable IDs and transactional deletion; undo tokens expire after 60 seconds. Tests cover migration, persistence, selection, retention, recording disabled and separation from saved data. Bounded search sessions stream per-source results, preserve received results on cancellation, cache provider queries and report individual failures. Cache keys exclude changing health timestamps, so a source status update does not invalidate reusable results. No embedding model is downloaded automatically.
 
 ## Live viewing checks
 
@@ -75,7 +75,7 @@ For context, v3 in a fresh system Edge instance measured 3.196 s browser-ready, 
 
 Automated tests include real local HTTP transfers and actual FFmpeg/yt-dlp execution. Windows CI additionally launches the packaged executable, verifies profile migration/restart, navigates WebView2, tests back/forward/reload/find, lazy tabs, bookmarks, failed navigation, an actual renderer crash/recovery, local API isolation and real video frames. Browser E2E covers adding and searching a website, exact episode handoff, direct playback and history deletion/undo. Screenshots are captured from running applications.
 
-Local verification: 90 full-suite tests passed, followed by the new partial-source regression passing in the 20-test affected subset. Final CI reports contain the complete 91-test run.
+Local verification: 90 full-suite tests passed, followed by the partial-source and health-independent cache regressions passing in the affected subsets. Final CI reports contain the complete 92-test run.
 
 The release ZIP includes `BUILD.json`, provider and viewing reports, native cold/warm results and this audit. Source-provider reports may record outages without failing unrelated sources; build, local functional, native and real viewing gates must pass before publication.
 

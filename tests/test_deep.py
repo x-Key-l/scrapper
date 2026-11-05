@@ -13,6 +13,24 @@ def test_exact_title_is_not_confused_with_numbered_films():
     assert rank('Naruto', rows)[0]['title'] == 'Naruto'
 
 
+def test_deep_cache_survives_health_and_last_query_updates(tmp_path, monkeypatch):
+    from scenetrace import sources, network
+    from scenetrace.deep_sources import retrieve
+    store = Store(tmp_path)
+    calls = []
+    def request(*args):
+        calls.append(args)
+        return {'data':{'Page':{'media':[], 'pageInfo':{'hasNextPage':False}}}}
+    monkeypatch.setattr(network, 'json_request', request)
+    monkeypatch.setattr(sources, 'paced', lambda source, operation: operation())
+    source = {'id':'anime','name':'Anime','kind':'anilist','endpoint':'https://graphql.anilist.co','health':'Untested'}
+    query = 'An anime where a boy discovers a strange forest portal'
+    retrieve(source, query, understand(query), store)
+    source.update(health='Search responded', last_query=12345, last_sync=12345, last_error='')
+    retrieve(source, query, understand(query), store)
+    assert len(calls) == 1
+
+
 def test_encyclopedia_requires_actual_cast_credit():
     from scenetrace.encyclopedia import search
     def response(params, base=None):
