@@ -206,9 +206,12 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
         worker_log=tmp_path/'worker-diagnostic.txt'
         log_file=worker_log.open('w')
         def diagnostic_popen(args,**kwargs):
-            if '--worker' in args: kwargs['stderr']=log_file
+            if '--worker' in args or '-c' in args: kwargs['stderr']=log_file
             return original_popen(args,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',diagnostic_popen)
+        import sys
+        diagnostic_code="import json,sys,traceback;from scenetrace.media import worker\ntry: print(json.dumps(worker(json.load(sys.stdin))),flush=True)\nexcept Exception: traceback.print_exc();sys.exit(1)"
+        monkeypatch.setattr(media,'worker_args',lambda *args:[sys.executable,'-c',diagnostic_code])
         manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
         job=manager.add(info,fmt,str(tmp_path))
         try:

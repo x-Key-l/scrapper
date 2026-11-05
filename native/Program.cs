@@ -89,7 +89,7 @@ namespace SceneTrace
             ForeColor = Color.White;
             tools.BackColor = BackColor;
             tools.ForeColor = ForeColor;
-            tools.Renderer = new ToolStripProfessionalRenderer(new ChromeColors());
+            tools.Renderer = new ChromeRenderer();
             tools.Padding = new Padding(6,5,6,5);
             tools.AutoSize = false;
             tools.Height = 48;
@@ -162,6 +162,14 @@ namespace SceneTrace
             };
         }
 
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try{int dark=1;if(DwmSetWindowAttribute(Handle,20,ref dark,4)!=0)DwmSetWindowAttribute(Handle,19,ref dark,4);}catch(Exception){}
+        }
+
         private BrowserTab Current => tabs.SelectedTab?.Tag as BrowserTab;
 
         private void AddButton(string text, Action action, string label = null)
@@ -181,7 +189,10 @@ namespace SceneTrace
             try
             {
                 Directory.CreateDirectory(profile);
-                environment = await CoreWebView2Environment.CreateAsync(null, profile);
+                var browserOptions = new CoreWebView2EnvironmentOptions();
+                if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")) && !String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_QA_DOWNLOAD_PORT")))
+                    browserOptions.AdditionalBrowserArguments = "--host-resolver-rules=\"MAP download.scenetrace.test 127.0.0.1\"";
+                environment = await CoreWebView2Environment.CreateAsync(null, profile, browserOptions);
                 environment.BrowserProcessExited += (sender, eventArgs) => browserExited.TrySetResult(true);
                 appTab = CreateTab(appOrigin, true);
                 tabs.SelectedTab = appTab.Page;

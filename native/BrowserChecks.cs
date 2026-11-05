@@ -128,15 +128,17 @@ namespace SceneTrace
                 await Task.Delay(300);
                 if (tab.View.CoreWebView2.Source != before) throw new InvalidOperationException("File navigation escaped isolation.");
                 checks.Add("Local file navigation blocked");
+                var controlledDownloads = await CheckControlledTransfers(tab, checks);
                 var nativeDownloads = new List<object>();
                 nativeDownloads.Add(await CheckWebsiteDownload(tab, "https://www.w3schools.com/html/html5_video.asp", "https://www.w3schools.com/html/mov_bbb.mp4", ".mp4"));
                 nativeDownloads.Add(await CheckWebsiteDownload(tab, "https://www.w3.org/", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", ".pdf"));
-                checks.Add("Ordinary website MP4 and PDF download buttons completed; native progress and file headers verified on disk");
+                checks.Add("Ordinary website MP4 and PDF download buttons completed; byte counts and file headers verified on disk");
                 tab.View.CoreWebView2.Navigate("https://www.w3schools.com/html/html5_video.asp");
                 await WaitFor(tab, "document.querySelector('video') !== null", 35000);
                 await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelector('video').muted=true;document.querySelector('video').play()");
                 await WaitFor(tab, "document.querySelector('video').currentTime>1 && document.querySelector('video').videoWidth>0");
                 checks.Add("W3Schools website navigated and actual native WebView2 video frames advanced");
+                var protectionAndDetection = await CheckProtectionAndDetection(tab,checks);
                 await tab.View.CoreWebView2.ExecuteScriptAsync("document.querySelector('video').scrollIntoView({block:'center'})");
                 await Task.Delay(500);
                 var shot = json.Deserialize<Dictionary<string, object>>(await tab.View.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", "{}"));
@@ -163,8 +165,10 @@ namespace SceneTrace
                 {
                     websiteCheck = new { source = "HiAnime", browsing = "Unverified on this run", reason = error.Message, playback = "Unverified", download = "Unverified" };
                 }
+                var animepahe = await DiagnoseAnimepahe(tab);
+                await FlushDownloads();
                 File.WriteAllText(reportPath, json.Serialize(new { success = true, runtime = environment.BrowserVersionString,
-                    app_ready_seconds = Math.Round(appReady, 3), checks, measurements, websiteCheck, nativeDownloads,
+                    app_ready_seconds = Math.Round(appReady, 3), checks, measurements, websiteCheck, nativeDownloads, controlledDownloads, protectionAndDetection, animepahe,
                     scope = "Actual packaged WinForms WebView2 host on Windows CI. Memory includes the host and shared WebView2 processes, backend measured separately." }));
                 Environment.ExitCode = 0;
                 Close();

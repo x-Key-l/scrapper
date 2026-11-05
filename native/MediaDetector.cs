@@ -68,11 +68,11 @@ namespace SceneTrace
                     const items=[], title=document.title, seen=new Set();
                     const add=(url,label,kind,ad=false)=>{try{const u=new URL(url,location.href);if(!/^https?:$/.test(u.protocol)||seen.has(u.href))return;seen.add(u.href);items.push({url:u.href,title:label||title,kind,ad});}catch{}};
                     const media=[...document.querySelectorAll('video,audio')].slice(0,64);
-                    for(const v of media){const ad=!!v.closest('.adsbygoogle,[class*=advert],[id*=advert]');if(v.currentSrc||v.src)add(v.currentSrc||v.src,title,'HTML media',ad);for(const s of v.querySelectorAll('source'))add(s.src,title,'HTML source',ad);}
+                    for(const v of media){const ad=!!v.closest('.adsbygoogle,[class*=advert],[id*=advert]');const chosen=v.currentSrc||v.src||v.querySelector('source')?.src;if(chosen)add(chosen,title,'HTML media',ad);}
                     for(const a of [...document.querySelectorAll('a[download]')].slice(0,64))if(/\.(mp4|m4v|webm|mkv|mov|avi|mp3|m4a|ogg|opus|flac|wav|m3u8|mpd)(?:$|[?#])/i.test(a.href))add(a.href,a.textContent.trim()||title,'Website download');
-                    for(const m of document.querySelectorAll('meta[property=\"og:video\"],meta[property=\"og:video:url\"],meta[property=\"og:video:secure_url\"]'))add(m.content,title,'Video metadata');
+                    for(const m of document.querySelectorAll('meta[property=""og:video""],meta[property=""og:video:url""],meta[property=""og:video:secure_url""]'))add(m.content,title,'Video metadata');
                     let visited=0;const walk=x=>{if(!x||typeof x!=='object'||visited++>64)return;if(Array.isArray(x))return x.slice(0,20).forEach(walk);if(x['@type']==='VideoObject'&&x.contentUrl)add(x.contentUrl,x.name,'Structured video');if(x['@graph'])walk(x['@graph']);};
-                    for(const s of [...document.querySelectorAll('script[type=\"application/ld+json\"]')].slice(0,10)){if(s.textContent.length<262144)try{walk(JSON.parse(s.textContent));}catch{}}
+                    for(const s of [...document.querySelectorAll('script[type=""application/ld+json""]')].slice(0,10)){if(s.textContent.length<262144)try{walk(JSON.parse(s.textContent));}catch{}}
                     return {hasVideo:media.length>0,items};
                 })()";
                 var data=json.Deserialize<Dictionary<string,object>>(await tab.View.CoreWebView2.ExecuteScriptAsync(script));

@@ -143,7 +143,7 @@ def analyze(value, proxy):
             raise ValueError('Invalid Archive identifier.')
         raw = network.json_request('https://archive.org/metadata/'+quote(ident))
         meta = raw.get('metadata') or {}
-        if raw.get('is_dark') or raw.get('is_restricted') or raw.get('is_lendable'):
+        if raw.get('is_dark'):
             return {'title':text(meta.get('title')), 'url':value, 'formats':[], 'status':'Unsupported or inaccessible', 'notice':'Use the official Archive page for access to this item.'}
         formats = []
         for x in raw.get('files', []):

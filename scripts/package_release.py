@@ -19,6 +19,9 @@ for name in ('README.md','START-HERE.txt','THIRD-PARTY-NOTICES.md'):
 shutil.copytree('docs',stage/'docs',dirs_exist_ok=True)
 licenses=stage/'licenses'
 licenses.mkdir(exist_ok=True)
+for source in Path("native/Filters").glob("*"):
+    if source.name.endswith((".txt.gz.b64", "-HaGeZi.txt")):
+        shutil.copyfile(source,licenses/source.name)
 for name in ('yt-dlp','imageio-ffmpeg','pyinstaller','beautifulsoup4','soupsieve','truststore'):
     d=importlib.metadata.distribution(name)
     for p in d.files:

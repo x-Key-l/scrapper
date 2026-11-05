@@ -77,6 +77,11 @@ namespace SceneTrace
         public new void Focus()=>field.Input.Focus();
         internal void SelectAll()=>field.Input.SelectAll();
     }
+    internal sealed class ChromeRenderer : ToolStripProfessionalRenderer
+    {
+        internal ChromeRenderer():base(new ChromeColors()){}
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e){e.TextColor=e.Item.Enabled?Color.FromArgb(232,236,245):Color.Gray;base.OnRenderItemText(e);}
+    }
     internal sealed class ChromeColors : ProfessionalColorTable
     {
         public override Color ToolStripDropDownBackground=>Color.FromArgb(31,35,43);
