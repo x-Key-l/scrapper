@@ -92,7 +92,7 @@ namespace SceneTrace
                         reason == "UserPaused" ? "paused" : reason == "UserCanceled" ? "cancelled" : "failed";
                     double seconds = Math.Max(.01,(DateTime.UtcNow-transfer.PreviousTime).TotalSeconds);
                     double speed = Math.Max(0,(op.BytesReceived-transfer.PreviousBytes)/seconds);
-                    long? total = op.TotalBytesToReceive;
+                    long? total = op.TotalBytesToReceive.HasValue ? (long?)checked((long)op.TotalBytesToReceive.Value) : null;
                     if (total <= 0) total = null;
                     updates.Add(new { id = transfer.Id, title = Path.GetFileName(op.ResultFilePath), source = transfer.Source,
                         path = op.ResultFilePath, status = state, bytes = op.BytesReceived, total, speed = state == "downloading" ? (double?)speed : null,
