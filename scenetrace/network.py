@@ -20,6 +20,12 @@ class SourceError(ValueError):
     pass
 
 
+class HTTPStatusError(SourceError):
+    def __init__(self,status):
+        self.status=status
+        super().__init__(f'Source returned HTTP {status}. Refresh the source page or check its connection.')
+
+
 class UnsafeURL(SourceError):
     pass
 
@@ -136,7 +142,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
             if r.status == 429:
                 raise RateLimitError(r.getheader('Retry-After'))
             if r.status not in (200, 206):
-                raise SourceError(f'Source returned HTTP {r.status}. Check its status or credentials.')
+                raise HTTPStatusError(r.status)
             return conn, r, url
         except BaseException:
             conn.close()
@@ -211,6 +217,13 @@ class Proxy(BaseHTTPRequestHandler):
             if self.command != 'HEAD':
                 while chunk := r.read(65536):
                     self.wfile.write(chunk)
+        except HTTPStatusError as error:
+            if conn is None: self.send_error(error.status, 'Source response')
+        except RateLimitError as error:
+            if conn is None:
+                self.send_response(429);self.send_header('Retry-After',str(error.delay));self.end_headers()
+        except TrustError:
+            if conn is None: self.send_error(502, 'Certificate validation failed')
         except Exception:
             if conn is None:
                 self.send_error(502, 'Source unavailable')

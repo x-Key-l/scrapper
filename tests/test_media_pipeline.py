@@ -183,7 +183,8 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
             'testsrc2=s=96x64:r=10', '-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=22050',
             '-t', '2', '-c:v', 'libx264', '-g', '10', '-c:a', 'aac']
     args += ['-f','hls','-hls_time','1','-hls_list_size','0'] if container == 'hls' else ['-f','dash','-seg_duration','1']
-    subprocess.run(args+[str(manifest)], check=True, capture_output=True)
+    subprocess.run(args+[manifest.name], cwd=folder, check=True, capture_output=True)
+    assert len(list(folder.iterdir()))>2, 'FFmpeg must publish actual segments alongside the manifest.'
     class Handler(SimpleHTTPRequestHandler):
         def log_message(self, *args): pass
     host = ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(folder)))
@@ -217,9 +218,6 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
             if '--worker' in args or '-c' in args: kwargs['stderr']=log_file
             return original_popen(args,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',diagnostic_popen)
-        import sys
-        diagnostic_code="import json,sys,traceback;from scenetrace.media import worker\ntry: print(json.dumps(worker(json.load(sys.stdin))),flush=True)\nexcept Exception: traceback.print_exc();sys.exit(1)"
-        monkeypatch.setattr(media,'worker_args',lambda *args:[sys.executable,'-c',diagnostic_code])
         manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
         job=manager.add(info,fmt,str(tmp_path))
         try:

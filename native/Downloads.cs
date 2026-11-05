@@ -43,7 +43,7 @@ namespace SceneTrace
                 {
                     string folder = downloadFolder;
                     if (sourceFolders && Uri.TryCreate(tab.View.CoreWebView2.Source, UriKind.Absolute, out var source))
-                        folder = Path.Combine(folder, FileComponent(source.Host));
+                        folder = Path.Combine(folder, FileComponent(source.Host.StartsWith("www.")?source.Host.Substring(4):source.Host));
                     Directory.CreateDirectory(folder);
                     string name = Path.GetFileName(args.ResultFilePath);
                     string candidate = Path.Combine(folder, name);
@@ -64,6 +64,7 @@ namespace SceneTrace
                     status.Text = "Download: " + transfer.Operation.InterruptReason + ". Open Downloads for details.";
             };
             status.Text = "Download started: " + Path.GetFileName(args.ResultFilePath);
+            qaDownloadStarting?.Invoke(tab,args);
         }
 
         private async Task PumpDownloads()
@@ -105,6 +106,10 @@ namespace SceneTrace
                     pending.Add(transfer);
                 }
                 var response = json.Deserialize<Dictionary<string, object>>(await Post("desktop/downloads",new { updates }));
+                foreach (var transfer in pending.Where(t=>t.Operation.State==CoreWebView2DownloadState.Completed || (t.Operation.State==CoreWebView2DownloadState.Interrupted && !t.Operation.CanResume)).ToArray())
+                    nativeTransfers.Remove(transfer.Id);
+                foreach (var tab in openTabs.Where(t=>t.DownloadOnly && !nativeTransfers.Values.Any(d=>d.Tab==t)).ToArray())
+                {DisposeTab(tab);openTabs.Remove(tab);tab.Page.Dispose();}
                 if (response.TryGetValue("commands", out var commands))
                 {
                     foreach (Dictionary<string, object> command in (System.Collections.IEnumerable)commands)

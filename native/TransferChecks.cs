@@ -10,6 +10,7 @@ namespace SceneTrace
 {
     internal sealed partial class BrowserWindow
     {
+        private Action<BrowserTab,CoreWebView2DownloadStartingEventArgs> qaDownloadStarting;
         private async Task AwaitCondition(Func<bool> condition,string label,int timeout=30000)
         {
             var deadline=DateTime.UtcNow.AddMilliseconds(timeout);
@@ -28,22 +29,27 @@ namespace SceneTrace
             await AwaitCondition(()=>openTabs.Any(t=>t!=tab&&t!=appTab&&t.View?.CoreWebView2?.DocumentTitle=="Popup relationship"),"script-created popup relationship");
             checks.Add("Script-created about:blank popup retains its opener and document relationship");
             tabs.SelectedTab=tab.Page;
+            foreach(var popup in openTabs.Where(t=>t!=tab && t!=appTab && t.View?.CoreWebView2?.DocumentTitle=="Popup relationship").ToArray())CloseTab(popup);
             int progressEvents=0;
-            EventHandler<CoreWebView2DownloadStartingEventArgs> destination=(s,e)=>{
+            NativeTransfer activeTransfer=null;
+            Action<BrowserTab,CoreWebView2DownloadStartingEventArgs> destination=(sourceTab,e)=>{
+                activeTransfer=nativeTransfers.Values.First(t=>t.Operation==e.DownloadOperation);
                 if(e.Cancel)throw new InvalidOperationException("Application canceled controlled native download.");
                 e.ResultFilePath=Path.Combine(folder,Guid.NewGuid().ToString("N")+".zip");e.Handled=true;
                 e.DownloadOperation.BytesReceivedChanged+=(sender,args)=>progressEvents++;
             };
-            tab.View.CoreWebView2.DownloadStarting+=destination;
+            qaDownloadStarting=destination;
             try
             {
-                foreach(var mode in new[]{"pause","cancel","retry","redirect"})
+                foreach(var mode in new[]{"pause","cancel","retry","redirect","popup"})
                 {
-                    var before=new HashSet<string>(nativeTransfers.Keys);
-                    await tab.View.CoreWebView2.ExecuteScriptAsync("document.getElementById('"+(mode=="redirect"?"redirect":"download")+"').click()");
-                    await AwaitCondition(()=>nativeTransfers.Keys.Any(id=>!before.Contains(id)),"website ZIP download starting");
-                    var transfer=nativeTransfers.Values.First(t=>!before.Contains(t.Id));var op=transfer.Operation;
+                    activeTransfer=null;
+                    var elapsed=System.Diagnostics.Stopwatch.StartNew();
+                    await tab.View.CoreWebView2.ExecuteScriptAsync("document.getElementById('"+(mode=="redirect"?"redirect":mode=="popup"?"popup":"download")+"').click()");
+                    await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting");
+                    var transfer=activeTransfer;var op=transfer.Operation;
                     await AwaitCondition(()=>op.BytesReceived>131072,"native transfer progress");
+                    if(mode=="popup")CloseTab(transfer.Tab);
                     await FlushDownloads();
                     if(mode=="pause"||mode=="cancel")
                     {
@@ -62,7 +68,7 @@ namespace SceneTrace
                     }
                     await AwaitCondition(()=>op.State==CoreWebView2DownloadState.Completed,"ZIP transfer completion");
                     using(var file=File.OpenRead(op.ResultFilePath))using(var hash=SHA256.Create())
-                        results.Add(new{mode,state="Completed",bytes=file.Length,sha256=BitConverter.ToString(hash.ComputeHash(file)).Replace("-","").ToLowerInvariant()});
+                        results.Add(new{mode,state="Completed",bytes=file.Length,seconds=Math.Round(elapsed.Elapsed.TotalSeconds,3),sha256=BitConverter.ToString(hash.ComputeHash(file)).Replace("-","").ToLowerInvariant()});
                 }
                 if(progressEvents==0)throw new InvalidOperationException("Slow native download emitted no progress events.");
                 await FlushDownloads();
@@ -72,7 +78,7 @@ namespace SceneTrace
                 checks.Add("Real HTTP ZIP buttons, redirect, chosen paths, progressive bytes, pause/range-resume, cancel and fresh retry verified through unified Download Center");
                 return results;
             }
-            finally{tab.View.CoreWebView2.DownloadStarting-=destination;}
+            finally{qaDownloadStarting=null;}
         }
     }
 }

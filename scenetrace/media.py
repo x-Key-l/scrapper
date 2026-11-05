@@ -28,7 +28,7 @@ def failure_detail(error):
     """Classify observed failures without leaking signed URLs, cookies or headers."""
     message = str(error).lower()
     cases = [
-        (('certificate verify failed', 'certificate_verify_failed'), 'certificate', 'Certificate validation failed. Check Windows certificates, the clock, and any HTTPS-inspecting antivirus or proxy.'),
+        (('certificate verify failed', 'certificate_verify_failed', 'certificate validation failed'), 'certificate', 'Certificate validation failed. Check Windows certificates, the clock, and any HTTPS-inspecting antivirus or proxy.'),
         (('no space left', 'disk full'), 'disk_full', 'The destination disk is full. Free space and retry.'),
         (('permission denied',), 'permission', 'SceneTrace cannot write to the selected folder. Choose a writable folder.'),
         (('http error 401', 'http error 403', 'status 403', 'sign in', 'login required'), 'access', 'The source refused this request. Open the original page in the browser; an ordinary website download remains available independently.'),

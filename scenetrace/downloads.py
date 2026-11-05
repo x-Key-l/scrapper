@@ -39,6 +39,9 @@ class DownloadManager:
                 if j.get('engine') == 'browser':
                     j.update(status='failed', can_resume=False, error='The browser session ended. Open the source page to start this website download again.')
                 self.store.job(j)
+            if j.get('engine') == 'browser' and j['status'] not in ('completed','cancelled'):
+                j.update(status='failed',can_resume=False,error='The browser session ended. Open the source page to start this website download again.')
+                self.store.job(j)
             if j['status'] == 'completed': self.completed(j)
         for n in range(workers):
             t = threading.Thread(target=self._loop, name=f'download-{n}', daemon=True)

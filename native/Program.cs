@@ -24,6 +24,7 @@ namespace SceneTrace
         internal bool Loading;
         internal bool Creating;
         internal bool Closed;
+        internal bool DownloadOnly;
         internal long Started;
     }
 
@@ -272,6 +273,7 @@ namespace SceneTrace
                 core.Settings.IsPasswordAutosaveEnabled = false;
                 core.Settings.IsGeneralAutofillEnabled = false;
                 core.NewWindowRequested += async (s, e) => {
+                    if (tab.Trusted) {e.Handled=true;if(AllowedWebsite(e.Uri))Open(e.Uri,true);return;}
                     if (BlockPopup(tab,e)) {e.Handled=true;return;}
                     if (e.Uri != "about:blank" && !AllowedWebsite(e.Uri)) {e.Handled=true;return;}
                     var deferred=e.GetDeferral();
@@ -449,6 +451,13 @@ namespace SceneTrace
         private void CloseTab(BrowserTab tab)
         {
             if (tab == null || tab.Trusted) return;
+            if (nativeTransfers.Values.Any(t=>t.Tab==tab && (t.Operation.State==CoreWebView2DownloadState.InProgress || t.Operation.CanResume)))
+            {
+                tab.DownloadOnly=true;
+                tabs.TabPages.Remove(tab.Page);
+                status.Text="Tab closed. Its download continues in Download Center.";
+                return;
+            }
             DisposeTab(tab);
             openTabs.Remove(tab);
             tabs.TabPages.Remove(tab.Page);
