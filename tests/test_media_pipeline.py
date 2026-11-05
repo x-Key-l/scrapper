@@ -202,9 +202,23 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
         assert info['formats'], info
         fmt=next((f for f in info['formats'] if f['video'] and f['audio']),None)
         assert fmt,info
+        original_popen=subprocess.Popen
+        worker_log=tmp_path/'worker-diagnostic.txt'
+        log_file=worker_log.open('w')
+        def diagnostic_popen(args,**kwargs):
+            if '--worker' in args: kwargs['stderr']=log_file
+            return original_popen(args,**kwargs)
+        monkeypatch.setattr(subprocess,'Popen',diagnostic_popen)
         manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
         job=manager.add(info,fmt,str(tmp_path))
-        done=wait(manager,job['id'])
+        try:
+            done=wait(manager,job['id'])
+        except AssertionError as error:
+            log_file.flush()
+            raise AssertionError(str(error)+'\nControlled fixture worker: '+worker_log.read_text()) from error
+        finally:
+            log_file.close()
+
         subprocess.run([media.ffmpeg_path(),'-v','error','-i',done['path'],'-map','0:v:0','-map','0:a:0','-f','null','-'],check=True,capture_output=True,timeout=15)
     finally:
         if manager: manager.close()
