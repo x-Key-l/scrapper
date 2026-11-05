@@ -71,11 +71,11 @@ namespace SceneTrace
             internal readonly TextBox Input=new TextBox{BorderStyle=BorderStyle.None,Dock=DockStyle.Fill,BackColor=Color.FromArgb(36,40,49),ForeColor=Color.FromArgb(230,235,245)};
             internal Field(){BackColor=Color.FromArgb(36,40,49);Padding=new Padding(12,8,12,6);Controls.Add(Input);Resize+=(s,e)=>{using(var p=new GraphicsPath()){int d=18;p.AddArc(0,0,d,d,180,90);p.AddArc(Width-d,0,d,d,270,90);p.AddArc(Width-d,Height-d,d,d,0,90);p.AddArc(0,Height-d,d,d,90,90);p.CloseFigure();var previous=Region;Region=new Region(p);previous?.Dispose();}};}
         }
-        private readonly Field field;
-        internal RoundedAddress():base(new Field()){field=(Field)Control;Height=36;field.Input.KeyDown+=(s,e)=>OnKeyDown(e);}
-        public override string Text {get=>field?.Input.Text??"";set{if(field!=null)field.Input.Text=value;}}
-        public new void Focus()=>field.Input.Focus();
-        internal void SelectAll()=>field.Input.SelectAll();
+        private readonly Field addressField;
+        internal RoundedAddress():base(new Field()){addressField=(Field)Control;Height=36;addressField.Input.KeyDown+=(s,e)=>OnKeyDown(e);}
+        public override string Text {get=>addressField?.Input.Text??"";set{if(addressField!=null)addressField.Input.Text=value;}}
+        public new void Focus()=>addressField.Input.Focus();
+        internal void SelectAll()=>addressField.Input.SelectAll();
     }
     internal sealed class ChromeRenderer : ToolStripProfessionalRenderer
     {

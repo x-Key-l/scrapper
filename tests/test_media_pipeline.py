@@ -194,6 +194,14 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
         if parsed.hostname=='adaptive.example': return parsed,parsed.hostname,host.server_port,'127.0.0.1'
         return original(value)
     monkeypatch.setattr(network,'target',target)
+    http_failures=[]
+    original_open=network.open_url
+    def diagnostic_open(value,*args,**kwargs):
+        try:return original_open(value,*args,**kwargs)
+        except Exception as error:
+            http_failures.append((value,type(error).__name__,str(error)))
+            raise
+    monkeypatch.setattr(network,'open_url',diagnostic_open)
     proxy=network.start_proxy()
     manager=None
     try:
@@ -218,7 +226,7 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
             done=wait(manager,job['id'])
         except AssertionError as error:
             log_file.flush()
-            raise AssertionError(str(error)+'\nControlled fixture worker: '+worker_log.read_text()) from error
+            raise AssertionError(str(error)+'\nControlled fixture worker: '+worker_log.read_text()+'\nHTTP failures: '+repr(http_failures)+'\nFixture manifest: '+manifest.read_text()+'\nFiles: '+repr([p.name for p in folder.iterdir()])) from error
         finally:
             log_file.close()
 
