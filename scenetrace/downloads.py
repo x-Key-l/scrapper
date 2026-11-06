@@ -113,6 +113,7 @@ class DownloadManager:
                     raise ValueError('Finish or cancel this transfer before removing its history.')
                 with self.store.db() as c: c.execute('DELETE FROM jobs WHERE id=?',(key,))
                 self.items.pop(key)
+                self.events.pop(key,None)
                 return {'ok':True}
             if j.get('engine') == 'browser':
                 if action not in ('pause','resume','retry','cancel'):
@@ -157,9 +158,9 @@ class DownloadManager:
                 key = self.queue.get(timeout=.25)
             except queue.Empty:
                 continue
-            j = self.items[key]
             with self.lock:
-                if j['status'] != 'queued':
+                j = self.items.get(key)
+                if not j or j['status'] != 'queued':
                     self.queue.task_done()
                     continue
                 j['_running'] = True
