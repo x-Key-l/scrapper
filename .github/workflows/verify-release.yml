@@ -1,7 +1,7 @@
 name: Verify and package SceneTrace
 on:
   push:
-    branches: [main, 'build/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
