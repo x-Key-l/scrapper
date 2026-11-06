@@ -16,18 +16,18 @@ namespace SceneTrace
         private async Task<object> CheckProtectionAndDetection(BrowserTab tab,List<string> checks)
         {
             if(adDomains.Count<1000)throw new InvalidOperationException("Bundled domain rules were not loaded.");
-            if(!IsAdDomain("ad.doubleclick.net")||IsAdDomain("www.w3schools.com"))throw new InvalidOperationException("Domain rule classification failed.");
+            if(!IsAdDomain("ads.scorecardresearch.com")||IsAdDomain("www.w3schools.com"))throw new InvalidOperationException("Domain rule classification failed.");
             await ScanMedia(tab);
             if(!MediaFor(tab).Values.Any(x=>x.Url.Contains("mov_bbb.mp4")))throw new InvalidOperationException("Actual HTML5 video was not detected.");
             int before=blockedRequests.TryGetValue(tab,out var count)?count:0;
-            await tab.View.CoreWebView2.ExecuteScriptAsync("fetch('https://doubleclick.net/scenetrace-qa-request').catch(()=>{});");
+            await tab.View.CoreWebView2.ExecuteScriptAsync("fetch('https://ads.scorecardresearch.com/scenetrace-qa-request').catch(()=>{});");
             await AwaitCondition(()=>blockedRequests.TryGetValue(tab,out int n)&&n>before,"actual ad/tracker request blocking");
             string host=new Uri(tab.View.CoreWebView2.Source).Host;shieldAllowed.Add(host);
-            if(BlockResource(tab,"https://doubleclick.net/scenetrace-qa-request",CoreWebView2WebResourceContext.XmlHttpRequest))throw new InvalidOperationException("Per-site allowlist ignored.");
+            if(BlockResource(tab,"https://ads.scorecardresearch.com/scenetrace-qa-request",CoreWebView2WebResourceContext.XmlHttpRequest))throw new InvalidOperationException("Per-site allowlist ignored.");
             shieldAllowed.Remove(host);
-            if(BlockResource(tab,"https://doubleclick.net/video.mp4",CoreWebView2WebResourceContext.Media))throw new InvalidOperationException("Shield intercepted a media transfer.");
+            if(BlockResource(tab,"https://ads.scorecardresearch.com/video.mp4",CoreWebView2WebResourceContext.Media))throw new InvalidOperationException("Shield intercepted a media transfer.");
             int popupBefore=openTabs.Count,blockedBefore=blockedRequests[tab];
-            await tab.View.CoreWebView2.ExecuteScriptAsync("window.open('https://doubleclick.net/scenetrace-qa-popup','_blank')");
+            await tab.View.CoreWebView2.ExecuteScriptAsync("window.open('https://ads.scorecardresearch.com/scenetrace-qa-popup','_blank')");
             await AwaitCondition(()=>blockedRequests[tab]>blockedBefore,"advertising popup suppression");
             if(openTabs.Count!=popupBefore)throw new InvalidOperationException("Blocked popup created a browser tab.");
             await WaitFor(tab,"document.querySelector('video').currentTime>1 && document.querySelector('video').videoWidth>0");

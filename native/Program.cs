@@ -297,7 +297,7 @@ namespace SceneTrace
                 core.PermissionRequested += (s, e) => {
                     // Preserve WebView2's download permission flow. Denying every
                     // permission silently blocked a site's second automatic file.
-                    if(e.PermissionKind==CoreWebView2PermissionKind.MultipleAutomaticDownloads)
+                    if(e.PermissionKind==CoreWebView2PermissionKind.MultipleAutomaticDownloads || e.PermissionKind==CoreWebView2PermissionKind.FileReadWrite)
                         e.State=CoreWebView2PermissionState.Default;
                     else e.State = CoreWebView2PermissionState.Deny;
                 };

@@ -14,6 +14,8 @@ namespace SceneTrace
         internal BrowserTab Tab;
         internal string Source;
         internal bool Dirty = true;
+        internal EventHandler<object> ProgressHandler;
+        internal EventHandler<object> StateHandler;
         internal long PreviousBytes;
         internal DateTime PreviousTime = DateTime.UtcNow;
     }
@@ -58,14 +60,16 @@ namespace SceneTrace
             }
             var transfer = new NativeTransfer { Operation = args.DownloadOperation, Tab = tab, Source = sourceUrl };
             nativeTransfers[transfer.Id] = transfer;
-            transfer.Operation.BytesReceivedChanged += (s, e) => transfer.Dirty = true;
-            transfer.Operation.StateChanged += (s, e) => {
+            transfer.ProgressHandler = (s, e) => transfer.Dirty = true;
+            transfer.StateHandler = (s, e) => {
                 transfer.Dirty = true;
                 if (transfer.Operation.State == CoreWebView2DownloadState.Completed)
                     status.Text = "Download complete: " + Path.GetFileName(transfer.Operation.ResultFilePath);
                 else if (transfer.Operation.State == CoreWebView2DownloadState.Interrupted)
                     status.Text = "Download: " + transfer.Operation.InterruptReason + ". Open Downloads for details.";
             };
+            transfer.Operation.BytesReceivedChanged += transfer.ProgressHandler;
+            transfer.Operation.StateChanged += transfer.StateHandler;
             status.Text = "Download started: " + Path.GetFileName(args.ResultFilePath);
             qaDownloadStarting?.Invoke(transfer,args);
         }
@@ -110,7 +114,11 @@ namespace SceneTrace
                 }
                 var response = json.Deserialize<Dictionary<string, object>>(await Post("desktop/downloads",new { updates }));
                 foreach (var transfer in pending.Where(t=>t.Operation.State==CoreWebView2DownloadState.Completed || (t.Operation.State==CoreWebView2DownloadState.Interrupted && !t.Operation.CanResume)).ToArray())
+                {
+                    transfer.Operation.BytesReceivedChanged-=transfer.ProgressHandler;
+                    transfer.Operation.StateChanged-=transfer.StateHandler;
                     nativeTransfers.Remove(transfer.Id);
+                }
                 foreach (var tab in openTabs.Where(t=>t.DownloadOnly && !nativeTransfers.Values.Any(d=>d.Tab==t)).ToArray())
                 {DisposeTab(tab);openTabs.Remove(tab);tab.Page.Dispose();}
                 if (response.TryGetValue("commands", out var commands))

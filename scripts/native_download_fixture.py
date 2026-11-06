@@ -36,7 +36,7 @@ def start_fixture():
                 try:
                     for start in range(offset,len(data),32768):
                         self.wfile.write(data[start:start+32768]);self.wfile.flush();time.sleep(.015)
-                except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
+                except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError,ssl.SSLEOFError):pass
                 return
             html=b'''<!doctype html><title>Native download fixture</title><h1>Ordinary website buttons</h1>
             <a id="download" href="/slow.zip">Download ZIP</a>
