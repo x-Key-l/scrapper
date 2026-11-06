@@ -130,8 +130,8 @@ namespace SceneTrace
             bar.Items.Add(progress);
             Controls.Add(tabs);
             tabs.SetToolbar(tools);
-            Resize += (s,e) => address.Width = Math.Max(180,ClientSize.Width-430-(find.Visible?140:0));
-            address.Width = Math.Max(180,ClientSize.Width-430);
+            tools.Layout += (s,e) => FitAddress();
+            Resize += (s,e) => FitAddress();
             Controls.Add(bar);
             tabs.SelectedIndexChanged += async (s, e) => {
                 try { await ActivateTab(); }
@@ -169,6 +169,14 @@ namespace SceneTrace
         {
             base.OnHandleCreated(e);
             try{int dark=1;if(DwmSetWindowAttribute(Handle,20,ref dark,4)!=0)DwmSetWindowAttribute(Handle,19,ref dark,4);}catch(Exception){}
+        }
+
+        private bool fittingAddress;
+        private void FitAddress()
+        {
+            if(fittingAddress || tools.Width<300)return;
+            fittingAddress=true;
+            try{int occupied=tools.Padding.Horizontal+28;foreach(ToolStripItem item in tools.Items)if(item!=address && item.Available)occupied+=item.Width+item.Margin.Horizontal;address.Width=Math.Max(160,tools.Width-occupied);}finally{fittingAddress=false;}
         }
 
         private BrowserTab Current => tabs.SelectedTab?.Tag as BrowserTab;

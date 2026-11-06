@@ -20,7 +20,7 @@ namespace SceneTrace
         private async Task<List<object>> CheckControlledTransfers(BrowserTab tab,List<string> checks)
         {
             var results=new List<object>();
-            string origin="http://download.scenetrace.test:"+Environment.GetEnvironmentVariable("SCENETRACE_QA_DOWNLOAD_PORT");
+            string origin="https://download.scenetrace.test:"+Environment.GetEnvironmentVariable("SCENETRACE_QA_DOWNLOAD_PORT");
             string folder=Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")),"controlled-transfers");Directory.CreateDirectory(folder);
             tab.View.CoreWebView2.Navigate(origin);
             await WaitFor(tab,"document.title === 'Native download fixture'");
@@ -46,7 +46,7 @@ namespace SceneTrace
                     activeTransfer=null;
                     var elapsed=System.Diagnostics.Stopwatch.StartNew();
                     await tab.View.CoreWebView2.ExecuteScriptAsync("document.getElementById('"+(mode=="redirect"?"redirect":mode=="popup"?"popup":"download")+"').click()");
-                    await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting");
+                    await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting ("+mode+")");
                     var transfer=activeTransfer;var op=transfer.Operation;
                     await AwaitCondition(()=>op.BytesReceived>131072,"native transfer progress");
                     if(mode=="popup")CloseTab(transfer.Tab);

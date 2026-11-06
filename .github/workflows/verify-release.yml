@@ -26,6 +26,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Functional tests, including actual HTTP and media processing
         run: python -m pytest -q --junitxml=test-results.xml
+      - name: Measure media library indexing
+        run: python scripts/library_benchmark.py
       - name: Source application process smoke test
         run: python scripts/smoke.py
       - name: Real public source verification

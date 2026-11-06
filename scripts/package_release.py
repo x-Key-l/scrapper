@@ -37,6 +37,8 @@ for name in ('live-results.json', 'watch-results.json'):
 for name in ('cold.json', 'warm.json'):
     path = Path('artifacts/native-browser')/name
     if path.exists(): shutil.copyfile(path, stage/'docs'/('native-browser-'+name))
+benchmark=Path('artifacts/library-benchmark.json')
+if benchmark.exists():shutil.copyfile(benchmark,stage/'docs'/benchmark.name)
 path = Path('artifacts/v4-live/results.json')
 if path.exists(): shutil.copyfile(path, stage/'docs'/'website-live-results.json')
 sdk = Path.home()/'.nuget/packages/microsoft.web.webview2/1.0.3537.50'
