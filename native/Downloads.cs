@@ -37,23 +37,26 @@ namespace SceneTrace
         {
             // Native download UI owns Save As, destination changes, pause/cancel and
             // overwrite confirmation. Analysis is never a prerequisite for a file.
+            string sourceUrl=tab.View.CoreWebView2.Source;
+            if(!Uri.TryCreate(sourceUrl,UriKind.Absolute,out var page) || (page.Scheme!="http" && page.Scheme!="https"))
+                sourceUrl=args.DownloadOperation.Uri;
             if (!String.IsNullOrEmpty(downloadFolder))
             {
                 try
                 {
                     string folder = downloadFolder;
-                    if (sourceFolders && Uri.TryCreate(tab.View.CoreWebView2.Source, UriKind.Absolute, out var source))
+                    if (sourceFolders && Uri.TryCreate(sourceUrl, UriKind.Absolute, out var source))
                         folder = Path.Combine(folder, FileComponent(source.Host.StartsWith("www.")?source.Host.Substring(4):source.Host));
                     Directory.CreateDirectory(folder);
                     string name = Path.GetFileName(args.ResultFilePath);
                     string candidate = Path.Combine(folder, name);
                     int number = 1;
-                    while (File.Exists(candidate)) candidate = Path.Combine(folder, Path.GetFileNameWithoutExtension(name) + " (" + number++ + ")" + Path.GetExtension(name));
+                    while (File.Exists(candidate) || nativeTransfers.Values.Any(t=>String.Equals(t.Operation.ResultFilePath,candidate,StringComparison.OrdinalIgnoreCase))) candidate = Path.Combine(folder, Path.GetFileNameWithoutExtension(name) + " (" + number++ + ")" + Path.GetExtension(name));
                     args.ResultFilePath = candidate;
                 }
                 catch (Exception) { status.Text = "The preferred folder is unavailable. Choose another folder in the browser download dialog."; }
             }
-            var transfer = new NativeTransfer { Operation = args.DownloadOperation, Tab = tab, Source = tab.View.CoreWebView2.Source };
+            var transfer = new NativeTransfer { Operation = args.DownloadOperation, Tab = tab, Source = sourceUrl };
             nativeTransfers[transfer.Id] = transfer;
             transfer.Operation.BytesReceivedChanged += (s, e) => transfer.Dirty = true;
             transfer.Operation.StateChanged += (s, e) => {

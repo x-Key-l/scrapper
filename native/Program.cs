@@ -294,7 +294,13 @@ namespace SceneTrace
                     } catch(Exception) {status.Text="The popup could not open. Retry its button or open this page externally.";}
                     finally {deferred.Complete();}
                 };
-                core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Deny; };
+                core.PermissionRequested += (s, e) => {
+                    // Preserve WebView2's download permission flow. Denying every
+                    // permission silently blocked a site's second automatic file.
+                    if(e.PermissionKind==CoreWebView2PermissionKind.MultipleAutomaticDownloads)
+                        e.State=CoreWebView2PermissionState.Default;
+                    else e.State = CoreWebView2PermissionState.Deny;
+                };
                 core.DownloadStarting += (s, e) => TrackDownload(tab, e);
                 core.WebResourceResponseReceived += (s, e) => ObserveMedia(tab, e);
                 core.NavigationStarting += (s, e) => {

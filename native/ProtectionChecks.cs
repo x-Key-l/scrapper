@@ -49,6 +49,10 @@ namespace SceneTrace
             var library=json.Deserialize<Dictionary<string,object>>(await Post("library/list",new{}));
             if(!((IEnumerable)library["items"]).Cast<Dictionary<string,object>>().Any(x=>(string)x["job_id"]==(string)download["id"]))throw new InvalidOperationException("Completed detected video was not indexed in the library.");
             checks.Add("Detected real MP4 → extracted format → queued transfer → completed file → Media Library verified on the packaged Windows executable");
+            await UpdateFilters();
+            bool updated=File.Exists(Path.Combine(profile,"shield-rules.txt"));
+            if(adDomains.Count<1000)throw new InvalidOperationException("Filter update discarded working rules.");
+            checks.Add(updated?"Maintained HTTPS filter list downloaded, validated and cached":"Filter provider unavailable; existing protection rules preserved");
             var layouts=new List<object>();
             foreach(var size in new[]{new Size(1366,768),new Size(1920,1080)})
             {
@@ -58,7 +62,7 @@ namespace SceneTrace
             }
             ClientSize=new Size(1260,800);
             try{using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));bitmap.Save(Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")),"native-chrome.png"),ImageFormat.Png);}}catch(Exception){}
-            return new {rules=adDomains.Count,blocked_requests=blockedRequests[tab],filter_decisions=filterDecisions,filter_cpu_ms=Math.Round(1000.0*filterTicks/Stopwatch.Frequency,3),detected_urls=MediaFor(tab).Count,download_bytes=completed["bytes"],detect_to_download_seconds=Math.Round(timer.Elapsed.TotalSeconds,3),layouts};
+            return new {filter_update_verified=updated,rules=adDomains.Count,blocked_requests=blockedRequests[tab],filter_decisions=filterDecisions,filter_cpu_ms=Math.Round(1000.0*filterTicks/Stopwatch.Frequency,3),detected_urls=MediaFor(tab).Count,download_bytes=completed["bytes"],detect_to_download_seconds=Math.Round(timer.Elapsed.TotalSeconds,3),layouts};
         }
         private async Task<object> DiagnoseAnimepahe(BrowserTab tab)
         {

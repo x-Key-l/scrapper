@@ -137,20 +137,24 @@ class MediaLibrary:
     def edit(self, ids, values):
         if not isinstance(ids,list) or not ids: raise ValueError('Select one or more videos.')
         allowed={'title','series','category','source','collection','season','episode'}
+        changes={}
+        for name,value in values.items():
+            if name not in allowed: continue
+            if name in ('season','episode'):
+                if value in ('',None): value=None
+                elif not str(value).isdigit(): raise ValueError('Season and episode must be whole numbers.')
+                else: value=int(value)
+            else: value=str(value).strip()[:500]
+            changes[name]=value
         with self.lock:
-            for key in ids:
-                item=self.get(key)
-                for name,value in values.items():
-                    if name not in allowed: continue
-                    if name in ('season','episode'):
-                        if value in ('',None): value=None
-                        elif not str(value).isdigit(): raise ValueError('Season and episode must be whole numbers.')
-                        else: value=int(value)
-                    else: value=str(value).strip()[:500]
-                    item[name]=value
-                item['identity']=identity(item['series'])
-                item['website']=source_domain(item['source'])
-                self.put(item)
+            items=[self.get(key) for key in dict.fromkeys(ids)]
+            with self.store.db() as c:
+                for item in items:
+                    item.update(changes)
+                    item['identity']=identity(item['series'])
+                    item['website']=source_domain(item['source'])
+                    c.execute('UPDATE media_library SET data=?,updated=? WHERE id=?',
+                              (json.dumps(item),time.time(),item['id']))
         return {'ok':True}
 
     def move(self, ids, destination, rename=''):

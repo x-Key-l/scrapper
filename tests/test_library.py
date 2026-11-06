@@ -66,3 +66,15 @@ def test_native_restart_never_claims_it_can_resume_a_lost_operation(tmp_path):
     assert job['status']=='failed' and not job['can_resume']
     with pytest.raises(ValueError,match='cannot resume'):manager.control(job['id'],'resume')
     manager.close()
+
+
+def test_bulk_edit_validates_every_item_before_changing_catalog(tmp_path):
+    library=MediaLibrary(Store(tmp_path/'state'))
+    path=tmp_path/'Series E01.mp4';path.write_bytes(b'video')
+    item=library.add(path)
+    with pytest.raises(ValueError):
+        library.edit([item['id'],'missing'],{'category':'Anime'})
+    assert library.get(item['id'])['category']=='Unsorted'
+    with pytest.raises(ValueError):
+        library.edit([item['id']],{'category':'Anime','episode':'not a number'})
+    assert library.get(item['id'])['category']=='Unsorted'
