@@ -45,7 +45,7 @@ def start_fixture():
             self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(html)));self.end_headers();self.wfile.write(html)
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
     # The real browser applies insecure-download policy to HTTP ZIP files. Use a
-    # short-lived certificate trusted only in the disposable Windows CI user.
+    # short-lived certificate trusted only in the disposable Windows CI machine.
     # No production certificate validation or browser policy is disabled.
     if os.name == 'nt':
         directory=tempfile.TemporaryDirectory(prefix='scenetrace-qa-tls-')
@@ -58,13 +58,13 @@ $key=[System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::G
 [IO.File]::WriteAllText((Join-Path $env:SCENETRACE_QA_CERT_DIR 'cert.pem'),$certPem)
 [IO.File]::WriteAllText((Join-Path $env:SCENETRACE_QA_CERT_DIR 'key.pem'),$key.ExportPkcs8PrivateKeyPem())
 Export-Certificate -Cert $cert -FilePath (Join-Path $env:SCENETRACE_QA_CERT_DIR 'cert.cer') | Out-Null
-Import-Certificate -FilePath (Join-Path $env:SCENETRACE_QA_CERT_DIR 'cert.cer') -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+Import-Certificate -FilePath (Join-Path $env:SCENETRACE_QA_CERT_DIR 'cert.cer') -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
 $cert.Thumbprint
 """
         thumbprint=subprocess.check_output(['pwsh','-NoProfile','-NonInteractive','-Command',script],env=dict(os.environ,SCENETRACE_QA_CERT_DIR=str(root)),text=True).strip()
         def cleanup():
             subprocess.run(['pwsh','-NoProfile','-NonInteractive','-Command',
-                f"Remove-Item 'Cert:\\CurrentUser\\Root\\{thumbprint}','Cert:\\CurrentUser\\My\\{thumbprint}' -ErrorAction SilentlyContinue"],check=False)
+                f"Remove-Item 'Cert:\\LocalMachine\\Root\\{thumbprint}','Cert:\\CurrentUser\\My\\{thumbprint}' -ErrorAction SilentlyContinue"],check=False)
             directory.cleanup()
         atexit.register(cleanup)
         context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
