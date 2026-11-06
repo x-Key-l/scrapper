@@ -131,5 +131,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag="v4.0.0-rc.$GITHUB_RUN_NUMBER"
-          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 screens/anime-search.png screens/caminandes-playing.png screens/added-website-playing.png screens/native-browser/native-browser-playing.png --target "$GITHUB_SHA" --title "SceneTrace 4.0 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md
+          tag="v4.1.0-rc.$GITHUB_RUN_NUMBER"
+          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 screens/anime-search.png screens/caminandes-playing.png screens/added-website-playing.png screens/native-browser/native-browser-playing.png --target "$GITHUB_SHA" --title "SceneTrace 4.1 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md

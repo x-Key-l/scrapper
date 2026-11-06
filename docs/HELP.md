@@ -46,9 +46,29 @@ History settings control future recording and automatic retention. Turning recor
 
 ## Download an eligible video
 
-Open an episode that offers files, expand **Download this video**, choose an available format and destination, and confirm your authorization. **Downloads** shows progress, speed, remaining time, pause, cancel and retry. Resume depends on the server supporting byte ranges and retaining the same file. Collisions produce a new filename; disk space is checked. Compatible separate HTTP audio/video tracks can be combined with bundled FFmpeg.
+Open an episode that offers files, expand **Download this video**, choose an available format and destination, and start the transfer. **Downloads** shows progress, speed, remaining time, pause, cancel and retry. Resume depends on the server supporting byte ranges and retaining the same file. Collisions produce a new filename; disk space is checked. Compatible separate HTTP audio/video tracks can be combined with bundled FFmpeg.
 
 Some sources offer viewing only. SceneTrace keeps the exact original link when no eligible file is available. It does not bypass DRM, paywalls, login barriers or anti-bot challenges.
+
+## Ordinary browser downloads and detected video
+
+Use a website's own download button as usual. The native browser download dialog handles Save As and destination selection. These downloads do not require media analysis. They also appear in SceneTrace **Downloads**, where supported operations include pause, resume, cancel, open file, open folder and removal from transfer history. Removing history keeps the file and its library entry. Closing the download's tab keeps an active transfer alive; quitting the application stops native transfers. After restart, reopen the original website to start a fresh native download.
+
+The **Videos** control near the address bar becomes active when media is observed. Select an item to inspect formats, choose a folder and download. Only formats actually reported by the source appear. Possible adverts are separated from other candidates. If detection cannot find a compatible transfer, keep using the site's player or its own download controls. Playback, file transfer and metadata identification are different capabilities.
+
+MP4, WebM, MKV and common audio/container formats are supported when the transport is compatible. Standard unencrypted HLS/DASH can use yt-dlp's native fragment downloader; separate tracks can be merged by the included FFmpeg. No resolution or file-size ceiling is imposed. Available disk space and source access still matter.
+
+## Protection controls
+
+Click the shield beside the address bar to view blocked requests, disable protection globally, allow the current website, or update the domain list. The bundled HaGeZi Light list works offline; updates use the documented HTTPS provider. Old rules remain active if an update fails. This is domain filtering with limited cosmetic cleanup, not a full browser extension engine. If a website breaks, allow that site and refresh. Media requests and top-level document navigation are not blanket-blocked.
+
+## Media Library
+
+Completed video/audio transfers appear in **Media Library**. Import a folder to include older files without moving them. New downloads go into a source-domain folder by default; this can be disabled under **Automatic organization**. Category and recognized series subfolders are optional for analyzer downloads. Browser Save As can override its suggested folder.
+
+Names such as `Example Anime Ep 5`, `Example Anime Episode 005` and `Example Anime S1E05` provide episode information. Unique exact aliases already present in the local metadata index can resolve a series; fuzzy matches remain suggestions. Unknown categories stay Unsorted. SceneTrace does not silently label every episodic video as anime.
+
+Select videos and choose **Organize selected** to assign a category, series or collection. Use the same collection to merge groups; assign a new collection to split one. **Edit** changes metadata, **Rename file** changes the filename, and **Move selected files** changes the folder after confirmation. Collisions receive numbered names; existing files are not overwritten. Collection edits do not move files automatically.
 
 ## Startup and upgrades
 

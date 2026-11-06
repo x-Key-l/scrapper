@@ -12,8 +12,8 @@ from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
 
-USER_AGENT = 'SceneTrace/4.0 (desktop video discovery)'
-WIKIMEDIA_USER_AGENT = 'SceneTrace/4.0 (desktop video discovery; https://github.com/x-Key-l/scrapper)'
+USER_AGENT = 'SceneTrace/4.1 (desktop video discovery)'
+WIKIMEDIA_USER_AGENT = 'SceneTrace/4.1 (desktop video discovery; https://github.com/x-Key-l/scrapper)'
 
 
 class SourceError(ValueError):

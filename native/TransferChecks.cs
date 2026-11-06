@@ -16,6 +16,13 @@ namespace SceneTrace
             var deadline=DateTime.UtcNow.AddMilliseconds(timeout);
             while(DateTime.UtcNow<deadline){if(condition())return;await Task.Delay(100);}throw new InvalidOperationException("Timed out: "+label);
         }
+        private async Task ClickDownloadControl(BrowserTab tab,string id)
+        {
+            var core=tab.View.CoreWebView2;
+            var point=json.Deserialize<Dictionary<string,object>>(await core.ExecuteScriptAsync("(()=>{const a=document.getElementById("+json.Serialize(id)+");a.scrollIntoView({block:'center'});const r=a.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()"));
+            foreach(string type in new[]{"mousePressed","mouseReleased"})
+                await core.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent",json.Serialize(new{type,x=point["x"],y=point["y"],button="left",clickCount=1}));
+        }
         private async Task FlushDownloads(){await AwaitCondition(()=>!syncingDownloads,"download synchronization");await PumpDownloads();}
         private async Task<List<object>> CheckControlledTransfers(BrowserTab tab,List<string> checks)
         {
@@ -45,7 +52,7 @@ namespace SceneTrace
                 {
                     activeTransfer=null;
                     var elapsed=System.Diagnostics.Stopwatch.StartNew();
-                    await tab.View.CoreWebView2.ExecuteScriptAsync("document.getElementById('"+(mode=="redirect"?"redirect":mode=="popup"?"popup":"download")+"').click()");
+                    await ClickDownloadControl(tab,mode=="redirect"?"redirect":mode=="popup"?"popup":"download");
                     await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting ("+mode+")");
                     var transfer=activeTransfer;var op=transfer.Operation;
                     await AwaitCondition(()=>op.BytesReceived>131072,"native transfer progress");
