@@ -129,7 +129,6 @@ function watchDownload(result) {
         '<option value="original">Original</option><option value="mp4">Convert to MP4</option><option value="mp3">Audio MP3</option>' +
         '</select></div></div><label for="watch-destination">Destination folder</label><input name="destination" id="watch-destination" value="' +
         esc(state.data.settings.destination) + '"><button type="button" data-action="pick-folder" data-target="watch-destination">Browse</button>' +
-        '<label class="check"><input type="checkbox" name="authorized" required> I am authorized to download this video.</label>' +
         '<button class="primary">Queue download</button></form></details>';
 }
 

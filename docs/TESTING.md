@@ -34,3 +34,12 @@ The first Windows package is a release candidate, not a claim of completed manua
 - `tests/test_history.py` covers stable-ID migration, individual/bulk deletion, undo, retention, recording disabled and persistence. `tests/test_deep.py` covers exact/alternative/fuzzy titles, cast/character evidence, soft date clues, FTS recall and progressive cancellation.
 
 See V4-AUDIT.md for measured outcomes and precise limitations. A source's successful search does not establish its playback or download compatibility.
+
+## 4.1 transfer, detector, shield and media-library gates
+
+- Python tests include actual unencrypted HLS/DASH fragments, media processing, native host API authentication, completion-file validation, conservative episode matching, bulk-edit validation, source folders, collision-safe file moves and restart persistence.
+- The packaged native check uses public MP4/PDF buttons and a throttled real HTTPS ZIP fixture. The fixture creates a short-lived certificate in the disposable CI machine's trust store and removes it at exit. No production certificate or URL-validation bypass is used.
+- Controlled native checks exercise progress, pause/resume, cancellation, a new retry, redirects, popup/opener behavior and closing a transferring tab. Final ZIP hashes must match the served bytes.
+- Detector checks connect a real HTML5/network MP4 to extraction, file completion and Media Library indexing. Shield checks exercise ad requests, popup classification, allowlisting, media exemptions and a maintained-list update attempt. Update failure is reported without discarding prior rules.
+- UI tests import a folder, edit metadata, select and move files, and check unchanged bytes. These catalog fixture files are not presented as playback evidence.
+- `python scripts/library_benchmark.py` records initial and unchanged indexing for 1,000 small files; it does not measure video decoding.

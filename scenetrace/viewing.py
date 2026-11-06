@@ -238,7 +238,7 @@ class Viewing:
             info = websites.resolve(source, value)
         elif urlsplit(value).hostname in ('archive.org', 'www.archive.org', 'commons.wikimedia.org'):
             info = media.analyze(value, self.app.proxy)
-            info['download_allowed'] = open_license(info.get('license'))
+            info['download_allowed'] = bool(info.get('formats'))
         else:
             info = {'formats': [], 'download_allowed': False}
         formats = [f for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('url')]
@@ -270,8 +270,10 @@ class Viewing:
                 except (OSError, ValueError):
                     continue
             output['subtitles'] = subtitles
-        eligible = [f for f in formats if f.get('permitted', True)]
-        if info.get('download_allowed') and eligible:
+        eligible = list(formats)
+        # Missing license metadata is not a technical reason to hide a real file.
+        # Respect an explicit provider download setting when its official API has one.
+        if eligible and (episode['kind'] != 'peertube' or info.get('download_allowed')):
             analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=eligible, analyzed=time.time())
             safe = self.app.register_analysis(analysis)
             output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])

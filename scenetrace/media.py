@@ -9,7 +9,39 @@ from urllib.parse import quote, unquote, urlencode, urlsplit
 from . import network
 from .model import text, url
 
-EXTENSIONS = {'mp4','webm','ogv','mov','mkv','mp3','m4a','ogg','wav','flac'}
+EXTENSIONS = {'mp4','m4v','webm','ogv','mov','mkv','avi','mpeg','mpg','ts','m2ts','flv','3gp',
+              'mp3','m4a','ogg','opus','wav','flac','aac','mka'}
+TRANSFER_PROTOCOLS = {'http', 'https', 'm3u8_native', 'http_dash_segments'}
+
+
+def format_issue(item):
+    if item.get('has_drm'):
+        return 'The source reports encrypted, DRM-protected media; no compatible decrypted format was provided.'
+    if item.get('protocol') not in TRANSFER_PROTOCOLS:
+        return 'The reported transport is not supported: ' + str(item.get('protocol') or 'unknown')
+    if not re.fullmatch(r'[a-zA-Z0-9]{1,10}', str(item.get('ext', ''))):
+        return 'The source did not report a usable file extension.'
+    return ''
+
+
+def failure_detail(error):
+    """Classify observed failures without leaking signed URLs, cookies or headers."""
+    message = str(error).lower()
+    cases = [
+        (('certificate verify failed', 'certificate_verify_failed', 'certificate validation failed'), 'certificate', 'Certificate validation failed. Check Windows certificates, the clock, and any HTTPS-inspecting antivirus or proxy.'),
+        (('no space left', 'disk full'), 'disk_full', 'The destination disk is full. Free space and retry.'),
+        (('permission denied',), 'permission', 'SceneTrace cannot write to the selected folder. Choose a writable folder.'),
+        (('http error 401', 'http error 403', 'status 403', 'sign in', 'login required'), 'access', 'The source refused this request. Open the original page in the browser; an ordinary website download remains available independently.'),
+        (('expired',), 'expired', 'The media URL expired. Refresh this video and try again.'),
+        (('http error 404', 'not found'), 'unavailable', 'This media address is no longer available. Refresh the original page.'),
+        (('drm',), 'protected', 'The source reports protected media without a compatible download format.'),
+        (('unsupported url', 'no video formats', 'unsupported transport'), 'unsupported', 'No compatible media format was found. Use the original page or its ordinary download button.'),
+        (('timed out', 'connection', 'network', 'name resolution'), 'network', 'The network request failed. Check connectivity and retry.'),
+    ]
+    for needles, code, detail in cases:
+        if any(needle in message for needle in needles):
+            return {'code': code, 'message': detail}
+    return {'code': 'extraction', 'message': 'The extractor could not read this video. Refresh the page or use its ordinary browser download; this is not evidence of protected media.'}
 
 
 def worker_args(*args):
@@ -19,11 +51,18 @@ def worker_args(*args):
 
 
 def ffmpeg_path():
+    # Linux distributions supply a maintained build; imageio's older static Linux
+    # binary crashes while probing MPEG-TS on some glibc hosts. Windows releases
+    # continue to use the bundled binary and need no system installation.
+    import shutil
+    if sys.platform.startswith('linux') and not getattr(sys, 'frozen', False):
+        installed = shutil.which('ffmpeg')
+        if installed:
+            return installed
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
     except (ImportError, RuntimeError):
-        import shutil
         return shutil.which('ffmpeg')
 
 
@@ -31,7 +70,7 @@ def worker(request):
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
-                cachedir=False, age_limit=0, plugin_dirs=[], js_runtimes={},
+                cachedir=False, plugin_dirs=[], js_runtimes={},
                 remote_components=set(), compat_opts={'no-certifi'}, playlistend=1, allowed_extractors=['default'],
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True)
     if request.get('download'):
@@ -52,13 +91,11 @@ def worker(request):
         info = ydl.extract_info(request['url'], download=False)
         if not info or info.get('_type') in ('playlist','multi_video'):
             raise ValueError('Select a single public video.')
-        if (info.get('age_limit') or 0) > 0 or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'):
-            raise ValueError('The source requires restricted access. Use its official viewing page.')
         if request.get('download'):
             by_id = {str(item.get('format_id')): item for item in info.get('formats', [])}
             tracks = [by_id.get(part) for part in format_ids]
-            if any(not track or track.get('has_drm') or track.get('protocol') not in ('http', 'https') for track in tracks):
-                raise ValueError('This format is no longer a supported public direct media format.')
+            if any(not track or format_issue(track) for track in tracks):
+                raise ValueError(next((format_issue(track) for track in tracks if track and format_issue(track)), 'The selected format is no longer available. Refresh this video.'))
             if len(tracks) == 2 and not (
                 tracks[0].get('vcodec') not in (None, 'none') and tracks[0].get('acodec') == 'none'
                 and tracks[1].get('vcodec') == 'none' and tracks[1].get('acodec') not in (None, 'none')
@@ -66,9 +103,11 @@ def worker(request):
                 raise ValueError('The selected video and audio tracks no longer match.')
             ydl.download([request['url']])
             return {'complete':True}
-        formats = []
+        formats, unsupported = [], []
         for x in info.get('formats') or []:
-            if x.get('has_drm') or x.get('protocol') not in ('http','https') or x.get('ext') not in EXTENSIONS:
+            issue = format_issue(x)
+            if issue:
+                unsupported.append({'id': str(x.get('format_id', '')), 'reason': issue})
                 continue
             if not re.fullmatch(r'[\w.-]+', str(x.get('format_id',''))):
                 continue
@@ -76,7 +115,7 @@ def worker(request):
                                 size=x.get('filesize') or x.get('filesize_approx'),
                                 label=x.get('format_note') or x.get('format') or x['ext'],
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
-                                method='extractor'))
+                                protocol=x.get('protocol'), method='extractor'))
         audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
@@ -89,7 +128,7 @@ def worker(request):
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
-                    extractor=info.get('extractor_key'))
+                    extractor=info.get('extractor_key'), unsupported_formats=unsupported)
 
 
 def analyze(value, proxy):
@@ -104,7 +143,7 @@ def analyze(value, proxy):
             raise ValueError('Invalid Archive identifier.')
         raw = network.json_request('https://archive.org/metadata/'+quote(ident))
         meta = raw.get('metadata') or {}
-        if raw.get('is_dark') or raw.get('is_restricted') or raw.get('is_lendable'):
+        if raw.get('is_dark'):
             return {'title':text(meta.get('title')), 'url':value, 'formats':[], 'status':'Unsupported or inaccessible', 'notice':'Use the official Archive page for access to this item.'}
         formats = []
         for x in raw.get('files', []):
@@ -137,8 +176,12 @@ def analyze(value, proxy):
             proc = subprocess.run(worker_args(), input=json.dumps(request), text=True, capture_output=True, timeout=50,
                                   creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             if proc.returncode:
+                try:
+                    failure = json.loads(proc.stdout.splitlines()[-1]).get('failure') or failure_detail(proc.stderr)
+                except (ValueError, IndexError):
+                    failure = failure_detail(proc.stderr)
                 return {'title':'Video at '+p.hostname, 'url':value, 'formats':[], 'status':'Unsupported or inaccessible',
-                        'notice':'The source did not expose supported public video metadata. Open the original page; login, DRM and other access controls are not bypassed.'}
+                        'failure':failure['code'], 'notice':failure['message']}
             info = json.loads(proc.stdout)
         except subprocess.TimeoutExpired:
             raise ValueError('Link analysis timed out. Try the official video page.')

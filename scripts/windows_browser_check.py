@@ -8,6 +8,8 @@ import tempfile
 import time
 import urllib.request
 import psutil
+from native_download_fixture import start_fixture
+fixture_server,fixture_bytes=start_fixture()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exe', default='dist/SceneTrace/SceneTrace.exe')
@@ -30,7 +32,8 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
         report = artifacts / ('cold.json' if index == 0 else 'warm.json')
         report.unlink(missing_ok=True)
         env = dict(os.environ, SCENETRACE_DATA=profile, SCENETRACE_BROWSER_REPORT=str(report),
-                   SCENETRACE_TEST_FIXTURES=str(Path('tests/browser-fixtures').resolve()))
+                   SCENETRACE_TEST_FIXTURES=str(Path('tests/browser-fixtures').resolve()),
+                   SCENETRACE_QA_DOWNLOAD_PORT=str(fixture_server.server_port))
         started = time.perf_counter()
         process = subprocess.Popen([str(exe)], env=env)
         address = None
@@ -59,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                 assert any(r['id']=='upgrade:keep' for r in state['saved'])
                 assert state['settings']['record_history'] is False
                 assert post(address, 'history/list', {})['entries'] == []
-            deadline = time.monotonic() + 180
+            deadline = time.monotonic() + 300
             while time.monotonic() < deadline and not report.is_file():
                 if process.poll() is not None:
                     raise RuntimeError('The packaged application exited without native browser evidence.')
@@ -72,6 +75,7 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
             reports.append(result)
             report.write_text(json.dumps(result, indent=2))
         finally:
+            (artifacts/'fixture-requests.json').write_text(json.dumps(fixture_server.requests,indent=2))
             if process.poll() is None:
                 try:
                     if address: post(address, 'shutdown', {})
@@ -79,4 +83,9 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                 except (OSError, subprocess.TimeoutExpired):
                     process.kill()
                     process.wait()
+    fixture_server.shutdown();fixture_server.server_close()
+    import hashlib
+    for report in reports:
+        for transfer in report.get('controlledDownloads',[]):
+            if transfer.get('state')=='Completed':assert transfer['sha256']==hashlib.sha256(fixture_bytes).hexdigest(),transfer
     print(json.dumps({'runs':reports, 'persistence':'Saved item, disabled recording and individual deletion survive restart'}, indent=2))
