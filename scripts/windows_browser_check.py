@@ -75,6 +75,7 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
             reports.append(result)
             report.write_text(json.dumps(result, indent=2))
         finally:
+            (artifacts/'fixture-requests.json').write_text(json.dumps(fixture_server.requests,indent=2))
             if process.poll() is None:
                 try:
                     if address: post(address, 'shutdown', {})

@@ -18,7 +18,11 @@ namespace SceneTrace
         }
         private async Task ClickDownloadControl(BrowserTab tab,string id)
         {
+            tabs.SelectedTab=tab.Page;
+            await ActivateTab();
+            tab.View.Focus();
             var core=tab.View.CoreWebView2;
+            await core.CallDevToolsProtocolMethodAsync("Page.bringToFront","{}");
             var point=json.Deserialize<Dictionary<string,object>>(await core.ExecuteScriptAsync("(()=>{const a=document.getElementById("+json.Serialize(id)+");a.scrollIntoView({block:'center'});const r=a.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()"));
             foreach(string type in new[]{"mousePressed","mouseReleased"})
                 await core.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent",json.Serialize(new{type,x=point["x"],y=point["y"],button="left",clickCount=1}));
@@ -53,7 +57,13 @@ namespace SceneTrace
                     activeTransfer=null;
                     var elapsed=System.Diagnostics.Stopwatch.StartNew();
                     await ClickDownloadControl(tab,mode=="redirect"?"redirect":mode=="popup"?"popup":"download");
-                    await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting ("+mode+")");
+                    try{await AwaitCondition(()=>activeTransfer!=null,"website ZIP download starting ("+mode+")");}
+                    catch(Exception error){
+                        var shot=json.Deserialize<Dictionary<string,object>>(await tab.View.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.captureScreenshot","{}"));
+                        File.WriteAllBytes(Path.Combine(folder,"failed-download-page.png"),Convert.FromBase64String((string)shot["data"]));
+                        string detail=await tab.View.CoreWebView2.ExecuteScriptAsync("JSON.stringify({url:location.href,title:document.title,link:document.getElementById('download')?.href,focus:document.hasFocus(),visibility:document.visibilityState})");
+                        throw new InvalidOperationException(error.Message+"; view="+tab.View.Visible+" "+tab.View.Size+"; "+detail,error);
+                    }
                     var transfer=activeTransfer;var op=transfer.Operation;
                     await AwaitCondition(()=>op.BytesReceived>131072,"native transfer progress");
                     if(mode=="popup")CloseTab(transfer.Tab);

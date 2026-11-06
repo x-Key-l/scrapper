@@ -21,6 +21,7 @@ def start_fixture():
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
         def do_GET(self):
+            self.server.requests.append({'path':self.path,'range':self.headers.get('Range','')})
             if self.path=='/redirect':
                 self.send_response(302);self.send_header('Location','/slow.zip');self.end_headers();return
             if self.path.startswith('/slow.zip'):
@@ -43,7 +44,7 @@ def start_fixture():
             <button id="popup" onclick="window.open('/slow.zip','_blank')">Download in new window</button>
             <button id="blank" onclick="const w=window.open('about:blank');w.document.write('<title>Popup relationship</title><p>Opened by its original website</p>');">Open related popup</button>'''
             self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(html)));self.end_headers();self.wfile.write(html)
-    server=ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True;server.requests=[]
     # The real browser applies insecure-download policy to HTTP ZIP files. Use a
     # short-lived certificate trusted only in the disposable Windows CI machine.
     # No production certificate validation or browser policy is disabled.
