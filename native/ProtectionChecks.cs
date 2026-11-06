@@ -26,10 +26,24 @@ namespace SceneTrace
             if(BlockResource(tab,"https://ads.scorecardresearch.com/scenetrace-qa-request",CoreWebView2WebResourceContext.XmlHttpRequest))throw new InvalidOperationException("Per-site allowlist ignored.");
             shieldAllowed.Remove(host);
             if(BlockResource(tab,"https://ads.scorecardresearch.com/video.mp4",CoreWebView2WebResourceContext.Media))throw new InvalidOperationException("Shield intercepted a media transfer.");
-            int popupBefore=openTabs.Count,blockedBefore=blockedRequests[tab];
-            await tab.View.CoreWebView2.ExecuteScriptAsync("window.open('https://ads.scorecardresearch.com/scenetrace-qa-popup','_blank')");
-            await AwaitCondition(()=>blockedRequests[tab]>blockedBefore,"advertising popup suppression");
-            if(openTabs.Count!=popupBefore)throw new InvalidOperationException("Blocked popup created a browser tab.");
+            int popupBefore=openTabs.Count;
+            bool? popupGesture=null;bool popupHandled=false;
+            EventHandler<CoreWebView2NewWindowRequestedEventArgs> popupObserver=(sender,args)=>{
+                if(args.Uri.Contains("scenetrace-qa-popup")){popupGesture=args.IsUserInitiated;popupHandled=args.Handled;}
+            };
+            tab.View.CoreWebView2.NewWindowRequested+=popupObserver;
+            try
+            {
+                // Host ExecuteScriptAsync is treated as a user action by WebView2.
+                // Test an unsolicited page timer, with no active click gesture.
+                await Task.Delay(5500);
+                await tab.View.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",json.Serialize(new{
+                    expression="setTimeout(()=>window.open('https://ads.scorecardresearch.com/scenetrace-qa-popup','_blank'),100)",userGesture=false}));
+                await AwaitCondition(()=>popupGesture.HasValue,"page-timer popup event");
+                if(popupGesture.Value || !popupHandled || openTabs.Count!=popupBefore)
+                    throw new InvalidOperationException("Unsolicited popup was not suppressed: userGesture="+popupGesture+", handled="+popupHandled+", tabs="+popupBefore+"→"+openTabs.Count);
+            }
+            finally{tab.View.CoreWebView2.NewWindowRequested-=popupObserver;}
             await WaitFor(tab,"document.querySelector('video').currentTime>1 && document.querySelector('video').videoWidth>0");
             checks.Add("Actual media response and HTML5 video detected; duplicate URLs collapsed; known advertising request and popup blocked; per-site allowlist and media exemption passed; video frames continue");
             var item=MediaFor(tab).Values.First(x=>x.Url.Contains("mov_bbb.mp4"));
