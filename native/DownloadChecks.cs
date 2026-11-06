@@ -14,6 +14,8 @@ namespace SceneTrace
         // doing so would conceal the exact regression this test must catch.
         private async Task<object> CheckWebsiteDownload(BrowserTab tab, string page, string file, string extension)
         {
+            tabs.SelectedTab=tab.Page;
+            await ActivateTab();
             tab.View.CoreWebView2.Navigate(page);
             await WaitFor(tab, "location.href.startsWith(" + json.Serialize(page) + ") && document.readyState === 'complete'", 35000);
             var folder = Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")), "transfers");
