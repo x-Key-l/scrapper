@@ -67,7 +67,7 @@ namespace SceneTrace
                     status.Text = "Download: " + transfer.Operation.InterruptReason + ". Open Downloads for details.";
             };
             status.Text = "Download started: " + Path.GetFileName(args.ResultFilePath);
-            qaDownloadStarting?.Invoke(tab,args);
+            qaDownloadStarting?.Invoke(transfer,args);
         }
 
         private async Task PumpDownloads()

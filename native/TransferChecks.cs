@@ -10,7 +10,7 @@ namespace SceneTrace
 {
     internal sealed partial class BrowserWindow
     {
-        private Action<BrowserTab,CoreWebView2DownloadStartingEventArgs> qaDownloadStarting;
+        private Action<NativeTransfer,CoreWebView2DownloadStartingEventArgs> qaDownloadStarting;
         private async Task AwaitCondition(Func<bool> condition,string label,int timeout=30000)
         {
             var deadline=DateTime.UtcNow.AddMilliseconds(timeout);
@@ -43,8 +43,8 @@ namespace SceneTrace
             foreach(var popup in openTabs.Where(t=>t!=tab && t!=appTab && t.View?.CoreWebView2?.DocumentTitle=="Popup relationship").ToArray())CloseTab(popup);
             int progressEvents=0;
             NativeTransfer activeTransfer=null;
-            Action<BrowserTab,CoreWebView2DownloadStartingEventArgs> destination=(sourceTab,e)=>{
-                activeTransfer=nativeTransfers.Values.First(t=>t.Operation==e.DownloadOperation);
+            Action<NativeTransfer,CoreWebView2DownloadStartingEventArgs> destination=(transfer,e)=>{
+                activeTransfer=transfer;
                 if(e.Cancel)throw new InvalidOperationException("Application canceled controlled native download.");
                 e.ResultFilePath=Path.Combine(folder,Guid.NewGuid().ToString("N")+".zip");e.Handled=true;
                 e.DownloadOperation.BytesReceivedChanged+=(sender,args)=>progressEvents++;
