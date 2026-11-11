@@ -1,6 +1,7 @@
 """Local application services. UI, adapters and downloads share one SQLite store."""
 import base64
 import hashlib
+import re
 import json
 import logging
 import os
@@ -49,6 +50,7 @@ class App:
                     settings={'destination':self.store.setting('destination',str(self.folder)), 'onboarded':self.store.setting('onboarded',False),
                               'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path()),
                               'native_browser':self.native_browser,
+                              'filename_template':self.store.setting('filename_template', '%(title)s [%(height)sp].%(ext)s'),
                               'record_history':self.store.setting('record_history', True),
                               'record_browsing':self.store.setting('record_browsing', True),
                               'history_retention_days':self.store.setting('history_retention_days', 0)})
@@ -180,6 +182,7 @@ class App:
 
     def register_analysis(self, result):
         key=uuid.uuid4().hex
+        result['formats'] = sorted(result.get('formats', []), key=lambda f: (bool(f.get('drm')), not (f.get('video') and f.get('audio')), -(f.get('height') or 0), -(f.get('tbr') or 0)))
         self.analyses[key]=result
         for old,v in list(self.analyses.items()):
             if time.time()-v.get('analyzed',time.time())>3600:
@@ -211,9 +214,21 @@ class App:
         if not fmt:
             raise ValueError('Select an available quality and format.')
         dest=body.get('destination') or self.store.setting('destination',str(self.folder))
-        return self.downloads.add(a,fmt,dest,output=body.get('output','original'))
+        selected = body.get('subtitles') or []
+        if isinstance(selected, str):
+            selected = [selected]
+        available = {track['language'] for track in a.get('subtitles', [])}
+        if not isinstance(selected, list) or any(not isinstance(lang, str) or lang not in available for lang in selected):
+            raise ValueError('Choose subtitles reported by the source.')
+        return self.downloads.add(dict(a, selected_subtitles=selected),fmt,dest,output=body.get('output','original'))
 
     def settings(self, body):
+        if 'filename_template' in body:
+            template = str(body['filename_template'])
+            fields = re.findall(r'%\(([^)]+)\)s', template)
+            if not template.strip() or len(template) > 500 or any(field not in ('title', 'height', 'ext', 'uploader') for field in fields):
+                raise ValueError('Use title, height, ext or uploader placeholders in the filename template.')
+            self.store.set_setting('filename_template', template)
         for key in ('record_history', 'record_browsing'):
             if key in body:
                 if not isinstance(body[key], bool):

@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from . import network, media
 
@@ -64,8 +65,10 @@ class DownloadManager:
             raise ValueError('There is not enough free space in the destination.')
         key = uuid.uuid4().hex
         ext = fmt['ext'] if output == 'original' else output
-        name = safe_name(info['title'])
-        suffix = '.' + fmt['ext']
+        template = self.store.setting('filename_template', '%(title)s [%(height)sp].%(ext)s')
+        fields = dict(title=info['title'], height=fmt.get('height') or 'original', ext=ext, uploader=', '.join(info.get('creators') or []))
+        name = safe_name(re.sub(r'%\((title|height|ext|uploader)\)s', lambda match: str(fields[match[1]]), template))
+        suffix = '.' + ext
         if name.lower().endswith(suffix.lower()):
             name = name[:-len(suffix)]
         final = folder / (name + '.' + ext)
@@ -83,7 +86,8 @@ class DownloadManager:
             raise ValueError('Could not allocate a free destination filename.')
         part = folder/('.scenetrace-'+key+'.'+fmt['ext'])
         j = dict(id=key, title=info['title'], source=info['url'], extractor_url=fmt.get('extractor_url') or info['url'],
-                 format=fmt, output=output, destination=str(folder), path=str(final), part=str(part),
+                 format=fmt, output=output, subtitles=info.get('selected_subtitles', []),
+                 metadata={k:info.get(k) for k in ('title','url','creators','duration','license')}, destination=str(folder), path=str(final), part=str(part),
                  temporary=str(part)+'.converted.'+ext, status='queued', bytes=0, total=fmt.get('size'),
                  speed=None, eta=None, progress=None, error='', created=time.time(), etag='')
         with self.lock:
@@ -154,6 +158,27 @@ class DownloadManager:
                     original = Path(j['temporary'])
                 os.replace(original, j['path'])
                 j.update(status='completed', bytes=Path(j['path']).stat().st_size, progress=100, eta=0)
+                try:
+                    metadata = j.get('metadata') or {}
+                    root = ET.Element('movie')
+                    for key, tag in (('title','title'),('url','source'),('creators','uploader'),('duration','duration'),('license','license')):
+                        value = metadata.get(key)
+                        if value:
+                            ET.SubElement(root, tag).text = ', '.join(value) if isinstance(value, list) else str(value)
+                    if len(root):
+                        sidecar = Path(j['path']).with_suffix('.nfo')
+                        if sidecar.exists():
+                            sidecar = Path(j['path'] + '.nfo')
+                        with sidecar.open('xb') as out:
+                            out.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+                    for lang in j.get('subtitles', []):
+                        for subtitle in Path(j['part']).parent.glob(Path(j['part']).stem + '.' + lang + '.*'):
+                            destination = Path(j['path'] + '.' + lang + subtitle.suffix)
+                            with destination.open('xb') as out:
+                                out.write(subtitle.read_bytes())
+                            subtitle.unlink()
+                except OSError as exc:
+                    j['notice'] = 'Media completed; sidecar could not be saved: ' + str(exc)
                 self._cleanup(j, reserve=False)
             except InterruptedError:
                 if j['status'] not in ('cancelled','paused'):
@@ -227,7 +252,7 @@ class DownloadManager:
             conn.close()
 
     def _extractor(self, j):
-        req = dict(url=j['extractor_url'], proxy=self.proxy, cookies=media.COOKIE_BROWSER, download=True, format_id=j['format'].get('extractor_id', j['format']['id']), output=j['part'])
+        req = dict(url=j['extractor_url'], proxy=self.proxy, cookies=media.COOKIE_BROWSER, download=True, subtitles=j.get('subtitles', []), format_id=j['format'].get('extractor_id', j['format']['id']), output=j['part'])
         errors = tempfile.TemporaryFile(mode='w+t', encoding='utf-8')
         proc = subprocess.Popen(media.worker_args(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=errors, text=True, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))

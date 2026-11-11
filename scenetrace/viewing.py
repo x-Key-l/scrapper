@@ -277,7 +277,7 @@ class Viewing:
         if eligible:
             analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=eligible, analyzed=time.time())
             safe = self.app.register_analysis(analysis)
-            output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])
+            output.update(analysis_id=safe['analysis_id'], formats=safe['formats'], subtitles=output.get('subtitles') or safe.get('subtitles', []))
         if info.get('notice'):
             output['message'] = (output.get('message', '') + ' ' + info['notice']).strip()
         if info.get('restricted'):

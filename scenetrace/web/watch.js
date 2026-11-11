@@ -120,7 +120,7 @@ async function showViewing(record) {
 
 function watchDownload(result) {
     if (!result.formats.length) return '<p class="meta">The source offers viewing through the options above.</p>';
-    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '"' + (format.id === result.playing_format_id ? ' selected' : '') + '>' +
+    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '"' + '' + '>' +
         esc([format.height && format.height + 'p', format.label, format.ext.toUpperCase(),
             format.video && !format.audio ? 'video only' : null, bytes(format.size)].filter(Boolean).join(' · ')) + '</option>').join('');
     return '<details class="panel"><summary>Download this video</summary><form data-watch-form="download" data-analysis="' + esc(result.analysis_id) + '">' +
@@ -129,7 +129,7 @@ function watchDownload(result) {
         '<option value="original">Original</option><option value="mp4">Convert to MP4</option><option value="mp3">Audio MP3</option>' +
         '</select></div></div><label for="watch-destination">Destination folder</label><input name="destination" id="watch-destination" value="' +
         esc(state.data.settings.destination) + '"><button type="button" data-action="pick-folder" data-target="watch-destination">Browse</button>' +
-        '<label class="check"><input type="checkbox" name="authorized"> I am authorized to download this video.</label>' +
+        subtitleOptions(result) + '<label class="check"><input type="checkbox" name="authorized"> I am authorized to download this video.</label>' +
         '<button class="primary">Queue download</button></form></details>';
 }
 

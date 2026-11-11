@@ -34,7 +34,7 @@ def worker(request):
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=25, retries=5, extractor_retries=3, fragment_retries=10,
-                concurrent_fragment_downloads=4, geo_bypass=False, allow_unplayable_formats=True,
+                concurrent_fragment_downloads=4, geo_bypass=False, allow_unplayable_formats=not request.get('download'),
                 plugin_dirs=[], remote_components=set(), compat_opts={'no-certifi'},
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True,
                 http_headers={'User-Agent':BROWSER_UA,'Accept-Language':'en-US,en;q=0.9'})
@@ -51,6 +51,8 @@ def worker(request):
             raise ValueError('Invalid format ID')
         if len(format_ids) == 2:
             opts['merge_output_format'] = 'mkv'
+        if request.get('subtitles'):
+            opts.update(writesubtitles=True, subtitleslangs=request['subtitles'], subtitlesformat='vtt/best')
         opts.update(format=fmt, outtmpl=request['output'], continuedl=True, nopart=False,
                     progress_hooks=[hook], overwrites=False,
                     postprocessor_args={'ffmpeg_i':['-protocol_whitelist','file,pipe']})
@@ -99,7 +101,8 @@ def worker(request):
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
-                    extractor=info.get('extractor_key'), restricted=restricted)
+                    extractor=info.get('extractor_key'), restricted=restricted,
+                    subtitles=[{'language': lang, 'label': lang} for lang in (info.get('subtitles') or {})])
 
 
 def analyze(value, proxy):
