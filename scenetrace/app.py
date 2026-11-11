@@ -211,7 +211,7 @@ class App:
         if not fmt:
             raise ValueError('Select an available quality and format.')
         dest=body.get('destination') or self.store.setting('destination',str(self.folder))
-        return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
+        return self.downloads.add(a,fmt,dest,output=body.get('output','original'))
 
     def settings(self, body):
         for key in ('record_history', 'record_browsing'):
