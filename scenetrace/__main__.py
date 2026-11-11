@@ -38,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
         for k,v in {'Content-Type':mime,'Content-Length':str(len(data)),'Cache-Control':'no-store',
                     'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
                     'Cross-Origin-Resource-Policy':'same-origin',
-                    'Content-Security-Policy':"default-src 'self'; img-src 'self' https: data:; media-src 'self' https:; frame-src https:; connect-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}.items():
+                    'Content-Security-Policy':"default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; frame-src https:; connect-src 'self' https:; script-src 'self' https://cdn.jsdelivr.net/npm/hls.js@1.6.13/dist/hls.min.js; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}.items():
             self.send_header(k,v)
         self.end_headers()
         try:self.wfile.write(data)
