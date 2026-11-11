@@ -9,7 +9,8 @@ from urllib.parse import quote, unquote, urlencode, urlsplit
 from . import network
 from .model import text, url
 
-EXTENSIONS = {'mp4','webm','ogv','mov','mkv','mp3','m4a','ogg','wav','flac'}
+EXTENSIONS = {'mp4','webm','ogv','mov','mkv','mp3','m4a','ogg','wav','flac','m3u8','mpd','ts','m4s'}
+STREAM_EXT = {'m3u8','mpd'}
 
 
 def worker_args(*args):
