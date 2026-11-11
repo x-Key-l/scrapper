@@ -27,7 +27,7 @@ The [passing Windows/package and browser run](https://github.com/x-Key-l/scrappe
 | Source | Search | Pages / episodes | Playback | Download |
 | --- | --- | --- | --- | --- |
 | HiAnime | 27 Naruto results | 220 ordered Naruto episode URLs | Exact source-page handoff; actual player unverified | No eligible path found |
-| W3Schools HTML Video | One listing result through Add Website | Exact public video page | Native WebView2 and SceneTrace direct video frames advanced | Not offered without permission evidence |
+| W3Schools HTML Video | One listing result through Add Website | Exact public video page | Native WebView2 and SceneTrace direct video frames advanced | 4.0 withheld this file; current branch offers direct downloads (live retest pending) |
 | Caminandes / Commons | Title and aliases | Three episodes | Actual Llamigos playback in packaged app | 6,564,631 bytes completed and FFmpeg decoded |
 | Official Pokémon TV | Pocket Monsters alias | First three Indigo League episodes | Exact publisher handoff verified; embedded frames unverified | Publisher playback only |
 
@@ -79,7 +79,7 @@ Local verification: 90 full-suite tests passed, followed by the partial-source a
 
 The release ZIP includes `BUILD.json`, provider and viewing reports, native cold/warm results and this audit. Source-provider reports may record outages without failing unrelated sources; build, local functional, native and real viewing gates must pass before publication.
 
-Owner acceptance still needed: older hardware, antivirus/SmartScreen, missing-runtime installation, native folder dialogs, sleep/wake and long transfers on the owner's network. The app is unsigned. General protected-stream extraction, arbitrary HLS/DASH, exhaustive anime availability and universal scene recognition are unsupported. Downloads require an eligible authorized path; viewing pages remain accessible when none exists.
+Owner acceptance still needed: older hardware, antivirus/SmartScreen, missing-runtime installation, native folder dialogs, sleep/wake and long transfers on the owner's network. The app is unsigned. The current branch expands enumeration to extractor-supported HLS/DASH and direct files. DRM formats are listed but not decrypted. Exhaustive anime availability and universal scene recognition remain unverified. Viewing pages remain accessible when analysis cannot return formats. The earlier Windows evidence above applies to 4.0, not this development branch.
 
 
 ## Pre-fix baseline — unrestricted-media
@@ -108,3 +108,7 @@ $ python -m scenetrace --check-runtime
   }
 ]
 ```
+
+## Current media branch verification
+
+Phases 4.1–4.11 expand media formats, website detection, official-page analysis, diagnostics, HLS player integration, batch queueing, subtitle selection and sidecars. Syntax checks pass. Initial functional run: 89 passed, 3 failed; two changed contracts and one real merge regression. Final regression results are recorded below when available. Public-network and cross-origin credential protections remain enabled. No source-side account, challenge or encryption mechanism is removed.

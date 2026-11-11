@@ -1,6 +1,6 @@
 # SceneTrace 4.0
 
-Browse video websites in tabs, search connected sources, identify forgotten titles, and open real episode pages or supported players. Metadata catalogs provide identification evidence; viewing and download availability are checked separately.
+Browse video websites in tabs, search connected sources, identify forgotten titles, and open real episode pages or supported players. Metadata catalogs provide identification evidence; media analysis supplies playback and download choices.
 
 ## Install on Windows
 
@@ -29,19 +29,21 @@ See [owner help](docs/HELP.md), [verified behavior and measurements](docs/V4-AUD
 | --- | --- | --- | --- |
 | Caminandes on Wikimedia Commons | Three animated episodes | Actual in-app playback tested on packaged Windows app | Completed licensed file transfer, decoded with FFmpeg |
 | Official Pokémon TV | Starter title aliases; first three Indigo League episodes | Exact publisher episode handoff verified; embed frames not verified | No eligible path offered |
-| W3Schools HTML Video page | Added through wizard; listing search verified | Actual direct playback in SceneTrace and native browser | No permission-backed download offered by this adapter |
+| W3Schools HTML Video page | Added through wizard; listing search verified | Actual direct playback in SceneTrace and native browser | Direct file is now offered; new transfer not live-verified |
 | HiAnime (`hianime.ms`) | Naruto search returns 27 results; Naruto detail page exposes 220 ordered episode links | Exact episode links; playback unverified | No verified eligible path |
 
-HiAnime's failure was an omitted `/details/` link pattern in the parser. Its public GET search URL is `/search?q=Naruto`; the tested search and episode list did not require JavaScript. This repair does **not** verify third-party players or give download permission. Website content and restrictions can change; retest the source on your PC.
+HiAnime's failure was an omitted `/details/` link pattern in the parser. Its public GET search URL is `/search?q=Naruto`; the tested search and episode list did not require JavaScript. This repair does **not** verify third-party players. Website content and restrictions can change; retest the source on your PC.
 
 AniList, TVmaze, Wikipedia/Wikidata and optional TMDB are metadata sources. Archive, Commons and PeerTube expose independent media capabilities; consult their latest connection report. TMDB requires your optional personal API Read Access Token. Optional Brave Search credentials enable wider source discovery. Built-in viewing examples need neither key.
 
 ## Limits
 
-No promise of universal site compatibility. Login barriers, anti-bot challenges, DRM, paywalls and protected playback are not bypassed. Arbitrary HLS/DASH extraction is unsupported; official players may handle their own adaptive streams. A direct media URL alone does not create a download button. The queue supports eligible HTTP files, pause/resume when the host supports ranges, retry, disk checks and compatible FFmpeg processing.
+Media enumeration follows the bundled yt-dlp extractor, including HLS/DASH and separate audio/video tracks. Direct files are offered without a license-link requirement. License information remains descriptive. DRM formats are listed and labeled but are not decrypted. Availability still depends on the source, account session and network. Set SCENETRACE_COOKIES to a supported browser name to use your own browser session; otherwise analysis is anonymous. Public-network validation, TLS validation and credential isolation remain enabled. The queue supports HTTP files, host-supported resume, retry, disk checks and FFmpeg processing. The optional HLS browser player needs access to its pinned CDN script and source CORS support.
 
 Deep Search uses bounded live catalogs, full-text retrieval, fuzzy titles, aliases, character/cast relationships, local FTS5 and evidence ranking. It does not recognize scenes absent from the available sources, and does not download an embedding model. Live provider results and rights vary by region and date.
 
 ## Verification
 
 The Windows pipeline builds the real executable, launches it, checks migration/restart, exercises WebView2 tabs and isolation, recovers a crashed renderer, plays real media and completes a licensed episode download. Browser tests cover the real Add Website and search-to-player workflow. The release ZIP contains build information and live reports; screenshots and SHA-256 checksum accompany the release. Performance figures are measured on shared Windows CI, not a low-end hardware guarantee.
+
+Analyze accepts several newline-separated links and queues the best non-DRM muxed choice when available. Download forms offer reported subtitle languages. Settings controls the filename template; completed files receive an NFO metadata sidecar without overwriting an existing sidecar.
