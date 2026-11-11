@@ -251,6 +251,8 @@ class DownloadManager:
                 self.events[j['id']].wait(.2)
             reader.join(timeout=2)
             if proc.returncode:
+                if j['format'].get('drm'):
+                    raise ValueError('Protected stream. yt-dlp could not decrypt it.')
                 errors.seek(0)
                 detail = next((line.strip() for line in reversed(errors.read().splitlines()) if line.strip()), 'No extractor diagnostic was returned.')
                 raise ValueError('The source could not deliver this format. ' + detail)

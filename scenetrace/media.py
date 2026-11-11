@@ -34,7 +34,7 @@ def worker(request):
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
                 socket_timeout=25, retries=5, extractor_retries=3, fragment_retries=10,
-                concurrent_fragment_downloads=4, geo_bypass=False,
+                concurrent_fragment_downloads=4, geo_bypass=False, allow_unplayable_formats=True,
                 plugin_dirs=[], remote_components=set(), compat_opts={'no-certifi'},
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True,
                 http_headers={'User-Agent':BROWSER_UA,'Accept-Language':'en-US,en;q=0.9'})
@@ -84,6 +84,9 @@ def worker(request):
                                 label=x.get('format_note') or x.get('format') or x['ext'],
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
                                 drm=bool(x.get('has_drm')), permitted=True, protocol=x.get('protocol'), url=x.get('url'), tbr=x.get('tbr'), method='extractor'))
+        for f in formats:
+            if f['drm']:
+                f['label'] += ' · DRM'
         audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
@@ -91,7 +94,7 @@ def worker(request):
                 if f['video'] and not f['audio']:
                     size = f['size'] + audio['size'] if f['size'] and audio['size'] else None
                     combinations.append(dict(f, id=f['id'] + '+' + audio['id'], ext='mkv', size=size,
-                                             label=f['label'] + ' with audio', audio=True))
+                                             label=f['label'] + ' with audio', audio=True, drm=f.get('drm') or audio.get('drm')))
             formats = combinations + formats
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
