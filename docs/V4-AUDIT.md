@@ -80,3 +80,31 @@ Local verification: 90 full-suite tests passed, followed by the partial-source a
 The release ZIP includes `BUILD.json`, provider and viewing reports, native cold/warm results and this audit. Source-provider reports may record outages without failing unrelated sources; build, local functional, native and real viewing gates must pass before publication.
 
 Owner acceptance still needed: older hardware, antivirus/SmartScreen, missing-runtime installation, native folder dialogs, sleep/wake and long transfers on the owner's network. The app is unsigned. General protected-stream extraction, arbitrary HLS/DASH, exhaustive anime availability and universal scene recognition are unsupported. Downloads require an eligible authorized path; viewing pages remain accessible when none exists.
+
+
+## Pre-fix baseline — unrestricted-media
+
+Base: `ce10f96105e88c421c205cdf8fc9485319951307`. Live attempts from the development environment; no browser-cookie profile was available. The YouTube URL is the age-gated Witcher trailer fixture documented in yt-dlp. Network failures below do not establish source incompatibility.
+
+```text
+$ python -m scenetrace --check-runtime
+{"yt_dlp": "2026.10.26", "ffmpeg": "ffmpeg version 7.0.2-static https://johnvansickle.com/ffmpeg/  Copyright (c) 2000-2024 the FFmpeg developers"}
+
+[
+  {
+    "url": "https://hlsjs.video-dev.org/demo/?src=https%3A%2F%2Ftest-streams.mux.dev%2Fx36xhzz%2Fx36xhzz.m3u8",
+    "seconds": 0.0,
+    "error": "The public hostname could not be safely resolved."
+  },
+  {
+    "url": "https://www.w3schools.com/html/html5_video.asp",
+    "seconds": 0.0,
+    "error": "The public hostname could not be safely resolved."
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=HtVdAasjOgU",
+    "seconds": 0.0,
+    "error": "The public hostname could not be safely resolved."
+  }
+]
+```
