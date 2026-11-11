@@ -56,10 +56,11 @@ def worker(request):
                     postprocessor_args={'ffmpeg_i':['-protocol_whitelist','file,pipe']})
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(request['url'], download=False)
-        if not info or info.get('_type') in ('playlist','multi_video'):
-            raise ValueError('Select a single public video.')
-        if (info.get('age_limit') or 0) > 0 or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'):
-            raise ValueError('The source requires restricted access. Use its official viewing page.')
+        if info and info.get('_type') in ('playlist','multi_video'):
+            info = next((entry for entry in info.get('entries',[]) if entry), None)
+        if not info:
+            raise ValueError('No media was returned for this URL.')
+        restricted = bool(info.get('age_limit') or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'))
         if request.get('download'):
             by_id = {str(item.get('format_id')): item for item in info.get('formats', [])}
             tracks = [by_id.get(part) for part in format_ids]
@@ -95,7 +96,7 @@ def worker(request):
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
-                    extractor=info.get('extractor_key'))
+                    extractor=info.get('extractor_key'), restricted=restricted)
 
 
 def analyze(value, proxy):
@@ -147,7 +148,7 @@ def analyze(value, proxy):
                         'notice':'The source did not expose supported public video metadata. Open the original page; login, DRM and other access controls are not bypassed.'}
             info = json.loads(proc.stdout)
         except subprocess.TimeoutExpired:
-            raise ValueError('Link analysis timed out. Try the official video page.')
+            return dict(title='Video at '+p.hostname,url=value,formats=[],notice='Link analysis timed out. Retry or open the original page.',restricted=False)
     info.update(url=value, source=p.hostname, analyzed=time.time())
     info['status'] = 'Download available' if info.get('formats') else 'Metadata only'
     direct = next((f['url'] for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('video') and f['ext'] in ('mp4','webm','ogv')), None)
