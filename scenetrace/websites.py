@@ -28,7 +28,7 @@ FIELD_NAMES = (
     'description_selector', 'episode_selector', 'episode_title_selector',
     'episode_link_selector', 'playback_selector', 'path_prefix', 'render_browser',
 )
-_RENDER_SLOT = threading.BoundedSemaphore(1)
+_RENDER_SLOT = threading.BoundedSemaphore(3)
 
 class WebsiteSearchError(network.SourceError):
     def __init__(self, code, message, diagnostics=None):
@@ -40,8 +40,8 @@ class WebsiteSearchError(network.SourceError):
 def check_restriction(page):
     heading = page.title.get_text(' ', strip=True).lower() if page.title else ''
     if any(marker in heading for marker in ('just a moment', 'attention required', 'verify you are human', 'access denied')):
-        raise WebsiteSearchError('service_restriction',
-                                 'This website asks for a browser verification. Open it in Browser to continue manually.')
+        return 'This website asks for browser verification. Open the original page to continue.'
+    return ''
 
 
 def infer_selectors(page):
@@ -63,6 +63,29 @@ def same_origin(a, b):
     return (p.scheme, p.hostname, p.port or (443 if p.scheme == 'https' else 80)) == (
         q.scheme, q.hostname, q.port or (443 if q.scheme == 'https' else 80),
     )
+
+
+def same_site(a, b):
+    # Trust the configured host and its subdomains; do not guess public suffixes.
+    p=(urlsplit(a).hostname or '').lower().removeprefix('www.')
+    q=(urlsplit(b).hostname or '').lower().removeprefix('www.')
+    return bool(p and q and (p==q or p.endswith('.'+q) or q.endswith('.'+p)))
+
+MEDIA_ATTRS = ('src','href','data-src','data-video','data-url','content','data','srcset')
+MEDIA_RE = re.compile(r'https?://[^\s\"\'<>]+?\.(?:m3u8|mpd|mp4|webm|mkv|ts|m4s|mp3|m4a)(?:\?[^\s\"\'<>]*)?', re.I)
+
+
+def media_candidates(doc, final):
+    found=[]
+    for node in doc.select('video,source,audio,iframe,embed,object,link[rel=preload],meta[property*=video],meta[itemprop*=contentUrl]'):
+        for attr in MEDIA_ATTRS:
+            value=relative(final,node.get(attr))
+            if value and urlsplit(value).hostname: found.append(value)
+    for script in doc.find_all('script'):
+        content=script.get_text().replace(r'\/', '/').replace(r'\u002F','/').replace(r'\u002f','/')
+        content=re.sub('%3a%2f%2f','://',content,flags=re.I)
+        found.extend(match.group(0) for match in MEDIA_RE.finditer(content))
+    return list(dict.fromkeys(found))
 
 
 def relative(base, value):
@@ -139,7 +162,7 @@ def browser_html(value):
                 '--disable-quic', '--disable-background-networking', '--disable-component-update',
                 '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
                 '--proxy-server=http://127.0.0.1:' + str(proxy.server_port),
-                '--proxy-bypass-list=<-loopback>', '--virtual-time-budget=4000',
+                '--proxy-bypass-list=<-loopback>', '--virtual-time-budget=12000',
                 '--user-data-dir=' + profile, value,
             ]
             try:
@@ -367,20 +390,22 @@ def episodes(source, value):
     return sorted(rows.values(), key=lambda row: (row['number'] is None, float(row['number'] or 0)))
 
 
-def resolve(source, value):
-    from .media import EXTENSIONS
+def resolve(source, value, proxy=''):
+    from . import media
+    from .media import EXTENSIONS, STREAM_EXT
     from .viewing import open_license, youtube_id
     p = urlsplit(value)
     ext = p.path.rsplit('.', 1)[-1].lower()
+    if ext in STREAM_EXT:
+        return media.analyze(value,proxy)
     if ext in EXTENSIONS:
         return dict(formats=[dict(id='original', url=value, ext=ext, video=ext not in ('m4a', 'mp3', 'ogg', 'wav', 'flac'),
-                                  audio=True, method='direct', label='Source file')], download_allowed=False)
-    if not same_origin(value, source['endpoint']):
+                                  audio=True, method='direct', label='Source file',permitted=True)], download_allowed=True)
+    if not same_site(value, source['endpoint']):
         return dict(formats=[], download_allowed=False)
     cfg = source['web_config']
     doc, final = fetch_page(value, cfg['render_browser'])
-    media_links = [relative(final, node_value(node, '', ('src', 'href', 'content'))) for node in
-                   select(doc, cfg['playback_selector'] or 'video[src], video source[src], meta[property="og:video:secure_url"]')]
+    media_links = media_candidates(doc, final)
     structured = list(structured_videos(doc))
     media_links.extend(relative(final, video.get('contentUrl')) for video in structured)
     download_links = {relative(final, anchor.get('href')) for anchor in doc.select('a[download][href]')}
@@ -391,10 +416,13 @@ def resolve(source, value):
     files = []
     for href in dict.fromkeys(media_links + list(download_links)):
         ext = urlsplit(href).path.rsplit('.', 1)[-1].lower()
-        if ext in EXTENSIONS:
+        if ext in STREAM_EXT:
+            resolved=media.analyze(href,proxy)
+            files.extend(dict(f,id=str(len(files))+':'+f['id'],extractor_id=f['id'],extractor_url=href,permitted=True) for f in resolved.get('formats',[]))
+        elif ext in EXTENSIONS:
             files.append(dict(id=str(len(files)), url=href, ext=ext, video=ext not in ('m4a', 'mp3', 'ogg', 'wav', 'flac'),
                               audio=True, method='direct', label='Website file',
-                              permitted=open_license(license_url) or href in download_links))
+                              license_permits=open_license(license_url) or href in download_links, permitted=True))
     tracks = [dict(url=relative(final, node.get('src')), language=node.get('srclang') or 'und',
                    label=node.get('label') or 'Subtitles') for node in doc.select('video track[src]')]
     embeds = [relative(final, video.get('embedUrl')) for video in structured]
@@ -411,4 +439,4 @@ def resolve(source, value):
             break
     return dict(title=doc.title.get_text(strip=True) if doc.title else '', formats=files,
                 subtitles=tracks, license=license_url, embed=embed,
-                download_allowed=any(f['permitted'] for f in files))
+                notice=check_restriction(doc), download_allowed=bool(files))
