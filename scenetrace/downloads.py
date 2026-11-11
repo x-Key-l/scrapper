@@ -228,7 +228,7 @@ class DownloadManager:
             conn.close()
 
     def _extractor(self, j):
-        req = dict(url=j['extractor_url'], proxy=self.proxy, download=True, format_id=j['format']['id'], output=j['part'])
+        req = dict(url=j['extractor_url'], proxy=self.proxy, cookies=media.COOKIE_BROWSER, download=True, format_id=j['format']['id'], output=j['part'])
         proc = subprocess.Popen(media.worker_args(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         proc.stdin.write(json.dumps(req))
