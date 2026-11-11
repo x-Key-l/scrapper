@@ -58,8 +58,8 @@ def worker(request):
         if request.get('download'):
             by_id = {str(item.get('format_id')): item for item in info.get('formats', [])}
             tracks = [by_id.get(part) for part in format_ids]
-            if any(not track or track.get('has_drm') or track.get('protocol') not in ('http', 'https') for track in tracks):
-                raise ValueError('This format is no longer a supported public direct media format.')
+            if any(not track for track in tracks):
+                raise ValueError('The selected format disappeared. Analyze again.')
             if len(tracks) == 2 and not (
                 tracks[0].get('vcodec') not in (None, 'none') and tracks[0].get('acodec') == 'none'
                 and tracks[1].get('vcodec') == 'none' and tracks[1].get('acodec') not in (None, 'none')
@@ -69,7 +69,7 @@ def worker(request):
             return {'complete':True}
         formats = []
         for x in info.get('formats') or []:
-            if x.get('has_drm') or x.get('protocol') not in ('http','https') or x.get('ext') not in EXTENSIONS:
+            if not x.get('url'):
                 continue
             if not re.fullmatch(r'[\w.-]+', str(x.get('format_id',''))):
                 continue
@@ -77,7 +77,7 @@ def worker(request):
                                 size=x.get('filesize') or x.get('filesize_approx'),
                                 label=x.get('format_note') or x.get('format') or x['ext'],
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
-                                method='extractor'))
+                                drm=bool(x.get('has_drm')), permitted=True, protocol=x.get('protocol'), url=x.get('url'), tbr=x.get('tbr'), method='extractor'))
         audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
