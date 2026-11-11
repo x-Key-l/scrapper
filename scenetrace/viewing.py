@@ -9,6 +9,7 @@ from . import media, network, open_catalog, sources
 from .model import url
 
 BROWSER_VIDEO = {'.mp4': 'video/mp4', '.webm': 'video/webm', '.ogv': 'video/ogg'}
+STREAM_MIME = {'application/vnd.apple.mpegurl', 'application/x-mpegurl', 'application/dash+xml', 'audio/mpegurl'}
 EXTERNAL_EPISODES = {
     'www.crunchyroll.com': r'/(?:[a-z-]+/)?watch/[^/]+',
     'www.hulu.com': r'/watch/[^/]+',
@@ -20,12 +21,17 @@ EXTERNAL_EPISODES = {
 
 def youtube_id(value):
     parsed = urlsplit(value)
-    if parsed.scheme != 'https':
+    if parsed.scheme not in ('http', 'https'):
         return ''
     if parsed.hostname == 'youtu.be':
         ident = parsed.path.strip('/')
-    elif parsed.hostname in ('youtube.com', 'www.youtube.com') and parsed.path == '/watch':
-        ident = parse_qs(parsed.query).get('v', [''])[0]
+    elif parsed.hostname in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'):
+        if parsed.path == '/watch':
+            ident = parse_qs(parsed.query).get('v', [''])[0]
+        elif re.fullmatch(r'/(shorts|embed|live|v)/[^/]+/?', parsed.path):
+            ident = parsed.path.strip('/').split('/')[1]
+        else:
+            return ''
     else:
         return ''
     return ident if re.fullmatch(r'[A-Za-z0-9_-]{11}', ident) else ''
@@ -54,6 +60,8 @@ def probe_file(value, *, browser=True):
         if not header or content_type in ('text/html', 'application/json'):
             raise network.SourceError('The host returned a page instead of a media file.')
         ext = '.' + urlsplit(final).path.rsplit('.', 1)[-1].lower()
+        if content_type in STREAM_MIME or (ext == '.m3u8' and header.lstrip().startswith(b'#EXTM3U')):
+            return {'url': final, 'mime': content_type, 'stream': True, 'size': None}
         expected = BROWSER_VIDEO.get(ext)
         valid_signature = header.startswith((b'\x1aE\xdf\xa3', b'OggS', b'ID3')) or b'ftyp' in header[:32]
         if browser and not (content_type in BROWSER_VIDEO.values() or (expected and valid_signature)):
@@ -212,16 +220,8 @@ class Viewing:
         base = {'episode': episode['title'], 'source': episode['source'], 'original': value, 'playback': 'external', 'formats': []}
         ident = youtube_id(value)
         if ident:
-            try:
-                data = network.json_request('https://www.youtube.com/oembed?' + urlencode({'url': value, 'format': 'json'}))
-                if data.get('type') == 'video' and data.get('title'):
-                    return dict(base, playback='embed', embed='https://www.youtube.com/embed/' + ident,
-                                message='Official YouTube player. If your region or browser blocks playback, open the exact episode on YouTube.')
-            except (OSError, ValueError):
-                pass
-            return dict(base, message='Open this exact episode in its official player. Embedded playback could not be checked here.')
-        if episode['kind'] == 'official':
-            return dict(base, message='Open the exact episode in the provider’s player. Availability depends on your location and account.')
+            base.update(playback='embed', embed='https://www.youtube.com/embed/' + ident,
+                        message='Official YouTube player. Open the original page if playback is unavailable.')
         try:
             return self.play_media(episode, base)
         except (OSError, ValueError) as exc:
@@ -235,15 +235,18 @@ class Viewing:
             info = self.peertube(value)
         elif episode['kind'] == 'website' and source:
             from . import websites
-            info = websites.resolve(source, value)
+            info = websites.resolve(source, value, self.app.proxy)
         elif urlsplit(value).hostname in ('archive.org', 'www.archive.org', 'commons.wikimedia.org'):
             info = media.analyze(value, self.app.proxy)
             info['download_allowed'] = open_license(info.get('license'))
         else:
-            info = {'formats': [], 'download_allowed': False}
-        formats = [f for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('url')]
+            try:
+                info = media.analyze(value, self.app.proxy)
+            except (OSError, ValueError) as exc:
+                info = {'formats': [], 'notice': str(exc)}
+        formats = [f for f in info.get('formats', []) if f.get('method') in ('direct', 'extractor') and f.get('url')]
         playable = sorted(
-            [f for f in formats if f.get('video') and '.' + f.get('ext', '') in BROWSER_VIDEO],
+            [f for f in formats if f.get('video') and not f.get('drm') and ('.' + f.get('ext', '') in BROWSER_VIDEO or f.get('ext') == 'm3u8')],
             key=lambda f: (f.get('ext') == 'ogv', abs((f.get('height') or 480) - 360)),
         )
         output = dict(base, license=info.get('license', ''), attribution=', '.join(info.get('creators') or []))
@@ -251,7 +254,7 @@ class Viewing:
         for selected in playable[:4]:
             try:
                 checked = probe_file(selected['url'])
-                output.update(playback='direct', stream='/media/' + self.ticket('stream', checked), message='Direct media checked. Use the player controls to watch.', quality=selected.get('height'), mime=checked['mime'], direct_url=checked['url'], playing_format_id=selected['id'])
+                output.update(playback='direct', stream=checked['url'] if checked.get('stream') else '/media/' + self.ticket('stream', checked), stream_ext='m3u8' if checked.get('stream') and checked['mime'] != 'application/dash+xml' else selected.get('ext'), message='Direct media checked. Use the player controls to watch.', quality=selected.get('height'), mime=checked['mime'], direct_url=checked['url'], playing_format_id=selected['id'])
                 break
             except (OSError, ValueError) as exc:
                 last_error = str(exc)
@@ -271,10 +274,14 @@ class Viewing:
                     continue
             output['subtitles'] = subtitles
         eligible = [f for f in formats if f.get('permitted', True)]
-        if info.get('download_allowed') and eligible:
+        if eligible:
             analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=eligible, analyzed=time.time())
             safe = self.app.register_analysis(analysis)
             output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])
+        if info.get('notice'):
+            output['message'] = (output.get('message', '') + ' ' + info['notice']).strip()
+        if info.get('restricted'):
+            output['message'] = (output.get('message', '') + ' The source reports account or availability requirements.').strip()
         return output
 
     def check(self, source, query, sample_url=''):
