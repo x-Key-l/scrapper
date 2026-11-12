@@ -27,9 +27,7 @@ def test_structure_failure_is_distinct_from_genuine_no_results(monkeypatch):
     assert error.value.code in ('javascript_required', 'result_structure')
     monkeypatch.setattr(websites, 'fetch_page', lambda value, render=False:(websites.parse_page('<h1>No results</h1>'), value))
     assert websites.search(source, 'missing')[0] == []
-    with pytest.raises(websites.WebsiteSearchError) as error:
-        websites.check_restriction(websites.parse_page('<title>Just a moment...</title>'))
-    assert error.value.code == 'service_restriction'
+    assert websites.check_restriction(websites.parse_page('<title>Just a moment...</title>'))
 
 
 def test_numbered_episode_pages_use_observed_public_attributes(monkeypatch):

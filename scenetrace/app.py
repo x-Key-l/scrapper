@@ -44,8 +44,10 @@ class App:
         self.imports.mkdir(exist_ok=True)
 
     def state(self):
+        # Snapshot completion before sources: completed imports must already be visible.
+        tasks = {k:dict(v) for k,v in list(self.tasks.items())}
         return dict(version=__version__, sources=self.store.sources(public=True), saved=self.store.saved(),
-                    history=self.store.history(), downloads=self.downloads.all(), tasks={k:dict(v) for k,v in list(self.tasks.items())},
+                    history=self.store.history(), downloads=self.downloads.all(), tasks=tasks,
                     bookmarks=self.store.bookmarks(),
                     settings={'destination':self.store.setting('destination',str(self.folder)), 'onboarded':self.store.setting('onboarded',False),
                               'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path()),
@@ -218,7 +220,7 @@ class App:
         if isinstance(selected, str):
             selected = [selected]
         available = {track['language'] for track in a.get('subtitles', [])}
-        if not isinstance(selected, list) or any(not isinstance(lang, str) or lang not in available for lang in selected):
+        if not isinstance(selected, list) or any(not isinstance(lang, str) or lang not in available or not re.fullmatch(r'[\w-]+', lang) for lang in selected):
             raise ValueError('Choose subtitles reported by the source.')
         return self.downloads.add(dict(a, selected_subtitles=selected),fmt,dest,output=body.get('output','original'))
 

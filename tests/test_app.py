@@ -112,3 +112,16 @@ def test_connection_test_does_not_overwrite_concurrent_configuration(server):
     actual=server.app.store.source('tvmaze')
     assert actual['name']=='My television catalog' and not actual['enabled']
     assert actual['health']=='Verified'
+
+
+def test_state_does_not_publish_completion_after_stale_source_read(server):
+    app = server.app
+    app.tasks['import'] = {'status':'running'}
+    def sources(public=True):
+        # Import commits after this read began; rows represent the earlier snapshot.
+        app.tasks['import']['status'] = 'completed'
+        return []
+    with patch.object(app.store, 'sources', side_effect=sources):
+        state = app.state()
+    assert state['sources'] == []
+    assert state['tasks']['import']['status'] == 'running'

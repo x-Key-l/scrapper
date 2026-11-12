@@ -21,6 +21,15 @@ jobs:
           python-version: '3.12'
       - name: Install pinned test and runtime dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Install checksum-pinned FFmpeg for Linux media tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --max-time 180 -o "$RUNNER_TEMP/ffmpeg.tar.xz" 'https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-11-12-39/ffmpeg-n8.1.3-35-gf1acb0a266-linux64-gpl-8.1.tar.xz'
+          echo "32430dc6642d835511470728811e1555ec7ec09d4d27638b059f0e577a98d4e7  $RUNNER_TEMP/ffmpeg.tar.xz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/scenetrace-ffmpeg"
+          tar -xJf "$RUNNER_TEMP/ffmpeg.tar.xz" --strip-components=1 -C "$RUNNER_TEMP/scenetrace-ffmpeg"
+          echo "$RUNNER_TEMP/scenetrace-ffmpeg/bin" >> "$GITHUB_PATH"
       - name: Functional tests, including actual HTTP and media processing
         run: python -m pytest -q --junitxml=test-results.xml
       - name: Source application process smoke test
@@ -82,7 +91,7 @@ jobs:
             SceneTrace-Windows-x64.zip
             SceneTrace-Windows-x64.sha256
   browser:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +104,7 @@ jobs:
           cache: npm
       - run: python -m pip install -r requirements.txt
       - run: npm ci
-      - run: npx playwright install chromium --with-deps --only-shell
+      - run: npx playwright install chromium --only-shell
       - name: Verify real search-to-watch workflows
         run: node scripts/video-e2e.cjs
       - name: Exercise the real browser application

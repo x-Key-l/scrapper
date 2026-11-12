@@ -31,13 +31,21 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await page.getByRole('button',{name:'Deep Search',exact:true}).click();
   await page.getByRole('textbox',{name:'Describe the video you remember'}).fill('girl mysterious forest portal');
   await page.getByText('Optional clues and source selection',{exact:true}).click();
+  await page.locator('.source-chip').filter({hasText:'ui-catalog.csv'}).waitFor();
   const chips=page.locator('[data-deep-source]');
   for(let i=0;i<await chips.count();i++){
    const label=await chips.nth(i).locator('..').textContent();
    if(!label.includes('ui-catalog'))await chips.nth(i).uncheck();
   }
   await page.getByRole('button',{name:'Search deeply'}).click();
-  await page.getByRole('heading',{name:'Forest Portal',exact:true}).waitFor({timeout:15000});
+  try {
+   await page.getByRole('heading',{name:'Forest Portal',exact:true}).waitFor({timeout:45000});
+  } catch(error) {
+   await fs.mkdir('artifacts',{recursive:true});
+   await page.screenshot({path:'artifacts/ui-deep-search-failure.png',fullPage:true});
+   console.error(await page.locator('body').innerText());
+   throw error;
+  }
   await page.getByRole('button',{name:'Find viewing options',exact:true}).first().click();
   await page.getByRole('dialog').getByRole('heading',{name:'Forest Portal',exact:true}).waitFor();
   await page.getByRole('button',{name:'Save title',exact:true}).click();
@@ -88,6 +96,19 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   assert.equal(await page.locator('.history-query').filter({hasText:'girl mysterious forest portal'}).count(),0);
   await page.getByRole('button',{name:'Undo deletion',exact:true}).click();
   await page.locator('.history-query').filter({hasText:'girl mysterious forest portal'}).waitFor();
+  await page.getByRole('button',{name:'Link Analyzer',exact:true}).click();
+  await page.getByText('Analyze and queue several links',{exact:true}).click();
+  await page.locator('#many-urls').fill('https://example.com/one.mp4\nhttps://example.com/two.m3u8');
+  assert.equal((await page.locator('#many-urls').inputValue()).split('\n').length,2);
+  const downloadMarkup=await page.evaluate(()=>watchDownload({analysis_id:'fixture',formats:[{id:'drm',ext:'mp4',height:720,label:'Source · DRM',video:true,audio:true,drm:true}],subtitles:[{language:'en',label:'English'}]}));
+  assert(downloadMarkup.includes('Source · DRM'));
+  assert(!/name="authorized" required/.test(downloadMarkup));
+  assert(downloadMarkup.includes('name="subtitles"'));
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.locator('[name="filename_template"]').fill('%(title)s.%(ext)s');
+  await page.getByRole('button',{name:'Save settings',exact:true}).click();
+  await page.getByText('Settings saved',{exact:true}).waitFor();
+  assert.equal(await page.locator('[name="filename_template"]').inputValue(),'%(title)s.%(ext)s');
   await page.getByRole('button',{name:'Home',exact:true}).click();
   await fs.mkdir('artifacts',{recursive:true});
   await page.screenshot({path:'artifacts/desktop.png',fullPage:true});

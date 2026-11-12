@@ -112,3 +112,46 @@ $ python -m scenetrace --check-runtime
 ## Current media branch verification
 
 Phases 4.1–4.11 expand media formats, website detection, official-page analysis, diagnostics, HLS player integration, batch queueing, subtitle selection and sidecars. Syntax checks pass. Initial functional run: 89 passed, 3 failed; two changed contracts and one real merge regression. Final regression results are recorded below when available. Public-network and cross-origin credential protections remain enabled. No source-side account, challenge or encryption mechanism is removed.
+
+### Final source regression evidence
+
+- `python -m pytest -q`: **110 passed in 29.49 seconds** on Linux.
+- Real local HLS and DASH: HTML discovery → yt-dlp format selection → downloaded bytes → successful FFmpeg decode. NFO sidecars created. These fixtures use a test-only hostname mapping; production private-network validation remains intact.
+- Real separate audio/video merge regression passes after limiting `allow_unplayable_formats` to analysis.
+- Existing range resume, interruption, retry, collision and persistence tests pass.
+- DRM enumeration and exact failure wording tested with controlled extractor/worker fixtures, not a live protected title.
+- `--check-runtime`: yt-dlp 2026.10.26; system Linux FFmpeg 7.1.5. The bundled Linux FFmpeg 7.0.2 crashed with exit -11 during HLS postprocessing; Linux now prefers system FFmpeg when installed. Windows retains the bundled binary.
+- Python compile checks and both edited JavaScript syntax checks pass. Required Python dependencies unchanged.
+- Local browser test blocked: system Chromium exits at startup because the environment denies its process-singleton socket. HLS CDN loading, player interaction and batch UI remain browser-unverified here.
+- Live external HLS/MP4/YouTube retests blocked by public DNS resolution. No user browser-cookie profile is available. Cloudflare challenge completion and a live DRM title are not verified.
+- Exact-host/subdomain matching is supported. Full public-suffix-aware registrable-domain equivalence is not implemented because no maintained suffix database is bundled.
+- Localhost/private targets and cross-origin credential forwarding remain blocked to preserve local API and credential isolation. Geo restriction evasion and third-party plugin/script execution are not enabled.
+
+### Phase commits
+
+| Phase | Commit | Files | Behavior / test delta |
+|---|---|---|---|
+| 4.0 | a5253bc | docs/V4-AUDIT.md | Runtime and three-URL pre-fix transcript; network failures recorded |
+| 4.1 | 7fab623 | media.py | Stream extensions; syntax checked |
+| 4.2 | abe4e1d | media.py | Protocol-neutral format enumeration; syntax checked |
+| 4.3 | dc163f7 | media.py, downloads.py | Extractor retries, headers and explicit cookie source; syntax checked |
+| 4.4 | 9f37f09 | media.py | Restriction metadata and first playlist entry; syntax checked |
+| 4.5 | a15e635 | network.py | Browser UA and normalized Host; isolation retained |
+| 4.6 | 5aed66b | websites.py | Structured/script media detection and manifest analysis; syntax checked |
+| 4.7 | 95e4919 | viewing.py | Official pages reach analyzer; syntax checked |
+| 4.8 | 2c5b440 | downloads.py, app.py | Checkbox gate removed; stderr and optional remux; syntax checked |
+| 4.9 | 8ea508e | media.py, downloads.py | DRM listing and exact failure; initial suite started |
+| 4.10 | 818a83c | web/app.js, web/watch.js, web/index.html, __main__.py | Optional HLS player and informational checkbox; JS checks pass |
+| 4.11 | bbb61a9 | media.py, downloads.py, app.py, viewing.py, web/app.js, web/watch.js | Batch queue, sorting, subtitles, template, NFO; syntax checks pass |
+| 4.12 | bd97f85 | README.md, docs/HELP.md, docs/V4-AUDIT.md | Capability and verification wording corrected |
+| 4.13 | This commit | Media/app/download/viewing/website fixes; tests/test_core.py, tests/test_website_v4.py, tests/test_media_pipeline.py, tests/test_media_contracts.py; this audit | 110 tests pass; 18 added cases; consent/restriction expectations updated; actual merge and manifest transfers preserved |
+
+### Windows follow-up, 12 November 2026
+
+[Windows verification job](https://github.com/x-Key-l/scrapper/actions/runs/43033165535/job/130565122962) passed at `cdfeff2`: all 110 tests, source and packaged-executable smoke tests, native WebView2 tests, real public episode download and packaged browser playback. The downloaded episode SHA-256 remained `dc430b910525915fa72081f11962d7758d028cd8c0b5742cce77a31f343ee88b`. A Windows package artifact was produced; no release was published.
+
+Linux setup failed on Ubuntu archive DNS, before completing application checks. The final phase now installs a checksum-pinned Linux FFmpeg test binary from GitHub and runs the separate UI job on Windows, removing the failing apt setup dependency. Pending UI assertions exercise paste-many input, subtitle options, DRM labels, the informational checkbox and filename-template persistence. Windows DASH fixture generation now uses the fixture directory as its working directory; actual download and decode assertions are unchanged. Phase 4.13 also touches `.github/workflows/verify-release.yml` and `scripts/ui-test.cjs`.
+
+Creating the branch automatically triggered the existing pipeline on unchanged main before phase 4.9. Phase 4.0–4.12 commits suppressed further CI; the changed-code packaged pipeline was first enabled with phase 4.13.
+
+Windows UI QA exposed an import-state race: source rows were read before task completion, allowing a completed import to be shown without its newly committed source. State now snapshots task completion before reading sources. The exact-result UI test also waits for the imported source selector. The optional HLS CDN script is asynchronous so its availability cannot block ordinary startup.

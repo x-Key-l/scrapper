@@ -169,7 +169,8 @@ def browser_html(value):
                 result = subprocess.run(args, capture_output=True, timeout=18, check=True,
                                         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
-                raise ValueError('The isolated browser could not render the public page.') from error
+                detail = (error.stderr or b'').decode('utf-8', errors='replace').strip().splitlines()
+                raise ValueError('The isolated browser could not render the public page. ' + (detail[-1] if detail else str(error))) from error
             if len(result.stdout) > 4 * 1024 * 1024:
                 raise ValueError('The rendered page exceeds the inspection size budget.')
             return result.stdout
@@ -423,6 +424,17 @@ def resolve(source, value, proxy=''):
             files.append(dict(id=str(len(files)), url=href, ext=ext, video=ext not in ('m4a', 'mp3', 'ogg', 'wav', 'flac'),
                               audio=True, method='direct', label='Website file',
                               license_permits=open_license(license_url) or href in download_links, permitted=True))
+    if not files:
+        for frame in doc.select('iframe[src], embed[src], object[data]')[:3]:
+            candidate = relative(final, frame.get('src') or frame.get('data'))
+            if not candidate or candidate == value:
+                continue
+            try:
+                resolved = media.analyze(candidate, proxy)
+                files.extend(dict(f, id=str(len(files))+':'+f['id'], extractor_id=f['id'],
+                                  extractor_url=candidate, permitted=True) for f in resolved.get('formats', []))
+            except (OSError, ValueError):
+                continue
     tracks = [dict(url=relative(final, node.get('src')), language=node.get('srclang') or 'und',
                    label=node.get('label') or 'Subtitles') for node in doc.select('video track[src]')]
     embeds = [relative(final, video.get('embedUrl')) for video in structured]

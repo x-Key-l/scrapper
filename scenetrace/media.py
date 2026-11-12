@@ -22,6 +22,11 @@ def worker_args(*args):
 
 
 def ffmpeg_path():
+    if sys.platform.startswith('linux'):
+        import shutil
+        system_ffmpeg = shutil.which('ffmpeg')
+        if system_ffmpeg:
+            return system_ffmpeg
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
@@ -81,22 +86,22 @@ def worker(request):
                 continue
             if not re.fullmatch(r'[\w.-]+', str(x.get('format_id',''))):
                 continue
-            formats.append(dict(id=str(x['format_id']), ext=x['ext'], height=x.get('height'),
+            formats.append(dict(id=str(x['format_id']), ext=x.get('ext') or 'bin', height=x.get('height'),
                                 size=x.get('filesize') or x.get('filesize_approx'),
-                                label=x.get('format_note') or x.get('format') or x['ext'],
+                                label=x.get('format_note') or x.get('format') or x.get('ext') or 'Original',
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
                                 drm=bool(x.get('has_drm')), permitted=True, protocol=x.get('protocol'), url=x.get('url'), tbr=x.get('tbr'), method='extractor'))
         for f in formats:
             if f['drm']:
                 f['label'] += ' · DRM'
-        audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
+        audio = next((f for f in sorted(formats, key=lambda f: (bool(f.get('drm')), -(f.get('tbr') or 0))) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
             for f in formats:
                 if f['video'] and not f['audio']:
                     size = f['size'] + audio['size'] if f['size'] and audio['size'] else None
                     combinations.append(dict(f, id=f['id'] + '+' + audio['id'], ext='mkv', size=size,
-                                             label=f['label'] + ' with audio', audio=True, drm=f.get('drm') or audio.get('drm')))
+                                             label=f['label'] + ' with audio' + (' · DRM' if audio.get('drm') and not f.get('drm') else ''), audio=True, drm=f.get('drm') or audio.get('drm')))
             formats = combinations + formats
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
@@ -109,7 +114,12 @@ def analyze(value, proxy):
     value = url(value)
     if not value:
         raise ValueError('Enter a public video or webpage URL.')
-    network.target(value)
+    try:
+        network.target(value)
+    except network.SourceError as exc:
+        if 'resolved' not in str(exc):
+            raise
+        return dict(title='Video',url=value,formats=[],notice=str(exc),status='Analysis unavailable')
     p = urlsplit(value)
     if p.hostname in ('archive.org','www.archive.org') and p.path.startswith(('/details/','/download/')):
         ident = unquote(p.path.split('/')[2])
@@ -151,7 +161,7 @@ def analyze(value, proxy):
                                   creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             if proc.returncode:
                 return {'title':'Video at '+p.hostname, 'url':value, 'formats':[], 'status':'Unsupported or inaccessible',
-                        'notice':'The source did not expose supported public video metadata. Open the original page; login, DRM and other access controls are not bypassed.'}
+                        'notice':next((line.strip() for line in reversed(proc.stderr.splitlines()) if line.strip()), 'The extractor returned no media metadata.')}
             info = json.loads(proc.stdout)
         except subprocess.TimeoutExpired:
             return dict(title='Video at '+p.hostname,url=value,formats=[],notice='Link analysis timed out. Retry or open the original page.',restricted=False)

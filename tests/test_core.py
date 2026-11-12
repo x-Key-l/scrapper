@@ -270,18 +270,17 @@ def wait_job(manager,key,statuses=('completed','failed','cancelled'),seconds=5):
 
 
 def add_job(manager,tmp_path,title='Example'):
-    return manager.add({'title':title,'url':'https://example.org/watch'},{'id':'0','ext':'mp4','size':4,'method':'direct','url':'https://example.org/file.mp4'},str(tmp_path),True)
+    return manager.add({'title':title,'url':'https://example.org/watch'},{'id':'0','ext':'mp4','size':4,'method':'direct','url':'https://example.org/file.mp4'},str(tmp_path))
 
 
-def test_download_consent_collision_bytes_and_persistence(store,tmp_path):
+def test_download_without_consent_collision_bytes_and_persistence(store,tmp_path):
     m=DownloadManager(store,'proxy',workers=1)
     try:
-        with pytest.raises(ValueError):m.add({'title':'X','url':'https://example.org'},{'ext':'mp4'},str(tmp_path),False)
-        (tmp_path/'Example.mp4').write_bytes(b'KEEP')
+        (tmp_path/'Example [originalp].mp4').write_bytes(b'KEEP')
         with patch('scenetrace.network.open_url',return_value=(Connection(),Response(b'DATA'),'url')):
             j=add_job(m,tmp_path);done=wait_job(m,j['id'])
         assert Path(done['path']).read_bytes()==b'DATA'
-        assert (tmp_path/'Example.mp4').read_bytes()==b'KEEP'
+        assert (tmp_path/'Example [originalp].mp4').read_bytes()==b'KEEP'
         assert done['status']=='completed' and store.jobs()
     finally:m.close()
 

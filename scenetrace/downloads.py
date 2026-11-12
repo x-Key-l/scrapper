@@ -57,6 +57,9 @@ class DownloadManager:
             raise ValueError('Choose Original, MP4 or MP3.')
         if output != 'original' and not media.ffmpeg_path():
             raise ValueError('FFmpeg is unavailable. Choose Original format.')
+        fmt = dict(fmt)
+        if not re.fullmatch(r'[A-Za-z0-9]{1,16}', str(fmt.get('ext', ''))):
+            fmt['ext'] = 'bin'
         folder = Path(destination).expanduser().resolve()
         if not folder.is_dir():
             raise ValueError('Choose an existing destination folder.')
@@ -87,7 +90,7 @@ class DownloadManager:
         part = folder/('.scenetrace-'+key+'.'+fmt['ext'])
         j = dict(id=key, title=info['title'], source=info['url'], extractor_url=fmt.get('extractor_url') or info['url'],
                  format=fmt, output=output, subtitles=info.get('selected_subtitles', []),
-                 metadata={k:info.get(k) for k in ('title','url','creators','duration','license')}, destination=str(folder), path=str(final), part=str(part),
+                 subtitle_tracks=info.get('subtitles', []), metadata={k:info.get(k) for k in ('title','url','creators','duration','license')}, destination=str(folder), path=str(final), part=str(part),
                  temporary=str(part)+'.converted.'+ext, status='queued', bytes=0, total=fmt.get('size'),
                  speed=None, eta=None, progress=None, error='', created=time.time(), etag='')
         with self.lock:
@@ -171,13 +174,22 @@ class DownloadManager:
                             sidecar = Path(j['path'] + '.nfo')
                         with sidecar.open('xb') as out:
                             out.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+                    if j['format'].get('method') == 'direct':
+                        for track in j.get('subtitle_tracks', []):
+                            if track.get('language') not in j.get('subtitles', []) or not track.get('url'):
+                                continue
+                            content, mime, final = network.fetch(track['url'], limit=4*1024*1024)
+                            suffix = 'vtt' if content.lstrip(b'\xef\xbb\xbf \r\n').startswith(b'WEBVTT') else 'srt'
+                            destination = Path(j['path'] + '.' + track['language'] + '.' + suffix)
+                            with destination.open('xb') as out:
+                                out.write(content)
                     for lang in j.get('subtitles', []):
                         for subtitle in Path(j['part']).parent.glob(Path(j['part']).stem + '.' + lang + '.*'):
                             destination = Path(j['path'] + '.' + lang + subtitle.suffix)
                             with destination.open('xb') as out:
                                 out.write(subtitle.read_bytes())
                             subtitle.unlink()
-                except OSError as exc:
+                except (OSError, ValueError) as exc:
                     j['notice'] = 'Media completed; sidecar could not be saved: ' + str(exc)
                 self._cleanup(j, reserve=False)
             except InterruptedError:

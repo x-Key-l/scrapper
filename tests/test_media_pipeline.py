@@ -169,3 +169,49 @@ def test_yt_dlp_merges_separate_authorized_http_tracks(tmp_path, fixture_video, 
         host.server_close()
         proxy.shutdown()
         proxy.server_close()
+
+
+@pytest.mark.parametrize('container,extension', [('hls','m3u8'), ('dash','mpd')])
+def test_manifest_page_actual_download_and_decode(tmp_path, fixture_video, monkeypatch, container, extension):
+    """Generate real streams, discover them on HTML, transfer and decode all output."""
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler
+    from scenetrace import websites
+    original = tmp_path/'input.mp4'
+    original.write_bytes(fixture_video)
+    manifest = tmp_path/('stream.'+extension)
+    subprocess.run([media.ffmpeg_path(), '-v','error','-i',str(original),'-c','copy',
+                    '-f',container,manifest.name], check=True, cwd=tmp_path)
+    (tmp_path/'player.html').write_text('<title>Fixture stream</title><video src="stream.'+extension+'"></video>')
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, *args): pass
+    host = ThreadingHTTPServer(('127.0.0.1',0), partial(Handler,directory=str(tmp_path)))
+    threading.Thread(target=host.serve_forever,daemon=True).start()
+    target = network.target
+    def resolve(value):
+        p = urlsplit(value)
+        if p.hostname == 'streams.example':
+            return p,p.hostname,host.server_port,'127.0.0.1'
+        return target(value)
+    monkeypatch.setattr(network,'target',resolve)
+    proxy = network.start_proxy()
+    manager = None
+    try:
+        proxy_url='http://127.0.0.1:'+str(proxy.server_port)
+        source = {'endpoint':'http://streams.example','web_config':{'render_browser':False}}
+        info = websites.resolve(source,'http://streams.example/player.html',proxy_url)
+        assert info['formats'],info
+        info.update(url='http://streams.example/player.html',title='Real '+container)
+        fmt = next((f for f in info['formats'] if f.get('video') and f.get('audio')), info['formats'][0])
+        manager = DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
+        job = manager.add(info,fmt,str(tmp_path))
+        try:
+            done = wait(manager,job['id'])
+        except AssertionError as exc:
+            raise AssertionError(str(exc) + '\nManifest: ' + manifest.read_text() + '\nFiles: ' + repr([path.name for path in tmp_path.iterdir()])) from exc
+        decoded = subprocess.run([media.ffmpeg_path(),'-v','error','-i',done['path'],'-f','null','-'],capture_output=True)
+        assert decoded.returncode == 0,decoded.stderr
+        assert Path(done['path']).with_suffix('.nfo').is_file()
+    finally:
+        if manager:manager.close()
+        proxy.shutdown();proxy.server_close();host.shutdown();host.server_close()

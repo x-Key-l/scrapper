@@ -265,6 +265,8 @@ class Viewing:
         if output['playback'] == 'direct':
             subtitles = []
             for track in info.get('subtitles', []):
+                if not track.get('url'):
+                    continue
                 try:
                     content, _, final = network.fetch(track['url'], limit=512 * 1024)
                     if content.lstrip(b'\xef\xbb\xbf \n\r').startswith(b'WEBVTT'):
