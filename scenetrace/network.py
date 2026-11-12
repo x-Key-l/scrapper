@@ -12,7 +12,7 @@ from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
 
-USER_AGENT = 'SceneTrace/4.0 (desktop video discovery)'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'
 WIKIMEDIA_USER_AGENT = 'SceneTrace/4.0 (desktop video discovery; https://github.com/x-Key-l/scrapper)'
 
 
@@ -119,7 +119,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
         agent = WIKIMEDIA_USER_AGENT if host == 'wikimedia.org' or host.endswith('.wikimedia.org') else USER_AGENT
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,
-                         {'Host': p.netloc, 'User-Agent': agent, 'Accept-Encoding': 'identity', **extra})
+                         {'Host': ('['+host+']' if ':' in host else host) + (':'+str(port) if port != (443 if p.scheme=='https' else 80) else ''), 'User-Agent': agent, 'Accept-Encoding': 'identity', **extra})
             r = conn.getresponse()
             if r.status in (301, 302, 303, 307, 308):
                 location = r.getheader('Location')

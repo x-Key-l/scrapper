@@ -24,7 +24,7 @@ Metadata cards are identification leads. Select **Find viewing options** to sear
 4. Review search results and each capability separately. Save the tested source, or keep a browse-only entry when integration is incomplete.
 5. In Quick Search, select that website and enter a title.
 
-Try **https://www.w3schools.com/html/html5_video.asp** with **HTML Video**. This listing exposes a real video. For **https://hianime.ms/**, the tested **Naruto** search retrieves title pages and 220 Naruto episode links. Playback and download from that website remain unverified; open an exact episode page to check its player. No access-control bypass is provided.
+Try **https://www.w3schools.com/html/html5_video.asp** with **HTML Video**. This listing exposes a real video. For **https://hianime.ms/**, the tested **Naruto** search retrieves title pages and 220 Naruto episode links. Playback and download from that website remain unverified; open an exact episode page to check its player.
 
 Advanced configuration supports search URL patterns, selectors, JSON mappings and feeds. Ordinary detected layouts do not require selector editing. You can edit, disable, retest or remove a source independently. A changed layout, restricted service, JavaScript requirement, network error and genuine empty search are reported separately.
 
@@ -48,7 +48,7 @@ History settings control future recording and automatic retention. Turning recor
 
 Open an episode that offers files, expand **Download this video**, choose an available format and destination, and confirm your authorization. **Downloads** shows progress, speed, remaining time, pause, cancel and retry. Resume depends on the server supporting byte ranges and retaining the same file. Collisions produce a new filename; disk space is checked. Compatible separate HTTP audio/video tracks can be combined with bundled FFmpeg.
 
-Some sources offer viewing only. SceneTrace keeps the exact original link when no eligible file is available. It does not bypass DRM, paywalls, login barriers or anti-bot challenges.
+Analyze lists direct files and formats supported by the bundled extractor, including HLS/DASH. DRM formats are labeled and selectable but are not decrypted. The exact original link remains available when analysis returns no formats. Account or network requirements appear as diagnostics. SCENETRACE_COOKIES optionally selects your own browser session; it is anonymous by default.
 
 ## Startup and upgrades
 

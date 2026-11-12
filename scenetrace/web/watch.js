@@ -120,7 +120,7 @@ async function showViewing(record) {
 
 function watchDownload(result) {
     if (!result.formats.length) return '<p class="meta">The source offers viewing through the options above.</p>';
-    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '"' + (format.id === result.playing_format_id ? ' selected' : '') + '>' +
+    const formats = result.formats.map(format => '<option value="' + esc(format.id) + '"' + '' + '>' +
         esc([format.height && format.height + 'p', format.label, format.ext.toUpperCase(),
             format.video && !format.audio ? 'video only' : null, bytes(format.size)].filter(Boolean).join(' · ')) + '</option>').join('');
     return '<details class="panel"><summary>Download this video</summary><form data-watch-form="download" data-analysis="' + esc(result.analysis_id) + '">' +
@@ -129,7 +129,7 @@ function watchDownload(result) {
         '<option value="original">Original</option><option value="mp4">Convert to MP4</option><option value="mp3">Audio MP3</option>' +
         '</select></div></div><label for="watch-destination">Destination folder</label><input name="destination" id="watch-destination" value="' +
         esc(state.data.settings.destination) + '"><button type="button" data-action="pick-folder" data-target="watch-destination">Browse</button>' +
-        '<label class="check"><input type="checkbox" name="authorized" required> I am authorized to download this video.</label>' +
+        subtitleOptions(result) + '<label class="check"><input type="checkbox" name="authorized"> I am authorized to download this video.</label>' +
         '<button class="primary">Queue download</button></form></details>';
 }
 
@@ -143,7 +143,7 @@ async function selectEpisode(index) {
         const result = await api('watch/play', {ticket: episode.ticket});
         if (request !== watchState.playRequest || player !== $('watch-player')) return;
         let playback = '';
-        if (result.playback === 'direct' && /^\/media\/[A-Za-z0-9_-]+$/.test(result.stream)) {
+        if (result.playback === 'direct' && (/^\/media\/[A-Za-z0-9_-]+$/.test(result.stream) || (result.stream_ext === 'm3u8' && link(result.stream)))) {
             playback = '<video id="episode-video" controls playsinline preload="metadata" src="' + esc(link(result.direct_url) || result.stream) + '">' +
                 (result.subtitles || []).map(track => '<track kind="subtitles" src="' + esc(track.url) + '" srclang="' +
                     esc(track.language) + '" label="' + esc(track.label) + '">').join('') + '</video>' +
@@ -162,6 +162,21 @@ async function selectEpisode(index) {
             (result.license ? '<p class="meta">License · ' + esc(result.license) + ' · ' + esc(result.attribution) + '</p>' : '') +
             neighbors + watchDownload(result);
         const video = $('episode-video');
+        if (watchState.hls) { watchState.hls.destroy(); watchState.hls = null; }
+        if (video && result.stream_ext === 'm3u8' && window.Hls?.isSupported()) {
+            video.removeAttribute('src');
+            const hls = new Hls({enableWorker: false});
+            watchState.hls = hls;
+            hls.loadSource(result.stream);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+                if (data.fatal && $('play-error')) $('play-error').textContent = 'Stream playback failed: ' + data.details + '. Open the original page or download the selected format.';
+            });
+            const observer = new MutationObserver(() => {
+                if (!video.isConnected) { hls.destroy(); observer.disconnect(); }
+            });
+            observer.observe(player.parentNode, {childList: true, subtree: true});
+        }
         video?.addEventListener('error', () => {
             if (video.getAttribute('src') !== result.stream) {
                 const shouldPlay = !video.paused;
@@ -251,7 +266,7 @@ document.addEventListener('submit', async event => {
             await searchVideos(values.query, state.view);
         }
         if (action === 'download') {
-            await api('download/add', {...values, analysis_id: form.dataset.analysis, authorized: values.authorized === 'on'});
+            await api('download/add', {...values, analysis_id: form.dataset.analysis});
             toast('Download queued. Track it under Downloads.');
         }
     } catch (error) {

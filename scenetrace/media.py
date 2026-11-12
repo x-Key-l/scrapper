@@ -9,7 +9,10 @@ from urllib.parse import quote, unquote, urlencode, urlsplit
 from . import network
 from .model import text, url
 
-EXTENSIONS = {'mp4','webm','ogv','mov','mkv','mp3','m4a','ogg','wav','flac'}
+EXTENSIONS = {'mp4','webm','ogv','mov','mkv','mp3','m4a','ogg','wav','flac','m3u8','mpd','ts','m4s'}
+STREAM_EXT = {'m3u8','mpd'}
+BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'
+COOKIE_BROWSER = os.environ.get('SCENETRACE_COOKIES','')
 
 
 def worker_args(*args):
@@ -19,6 +22,11 @@ def worker_args(*args):
 
 
 def ffmpeg_path():
+    if sys.platform.startswith('linux'):
+        import shutil
+        system_ffmpeg = shutil.which('ffmpeg')
+        if system_ffmpeg:
+            return system_ffmpeg
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
@@ -30,10 +38,13 @@ def ffmpeg_path():
 def worker(request):
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
-                socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
-                cachedir=False, age_limit=0, plugin_dirs=[], js_runtimes={},
-                remote_components=set(), compat_opts={'no-certifi'}, playlistend=1, allowed_extractors=['default'],
-                ffmpeg_location=ffmpeg_path(), hls_prefer_native=True)
+                socket_timeout=25, retries=5, extractor_retries=3, fragment_retries=10,
+                concurrent_fragment_downloads=4, geo_bypass=False, allow_unplayable_formats=not request.get('download'),
+                plugin_dirs=[], remote_components=set(), compat_opts={'no-certifi'},
+                ffmpeg_location=ffmpeg_path(), hls_prefer_native=True,
+                http_headers={'User-Agent':BROWSER_UA,'Accept-Language':'en-US,en;q=0.9'})
+    if request.get('cookies'):
+        opts['cookiesfrombrowser'] = (request['cookies'],)
     if request.get('download'):
         def hook(data):
             # JSON lines consumed by parent; do not emit provider URLs or headers.
@@ -45,20 +56,23 @@ def worker(request):
             raise ValueError('Invalid format ID')
         if len(format_ids) == 2:
             opts['merge_output_format'] = 'mkv'
+        if request.get('subtitles'):
+            opts.update(writesubtitles=True, subtitleslangs=request['subtitles'], subtitlesformat='vtt/best')
         opts.update(format=fmt, outtmpl=request['output'], continuedl=True, nopart=False,
                     progress_hooks=[hook], overwrites=False,
                     postprocessor_args={'ffmpeg_i':['-protocol_whitelist','file,pipe']})
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(request['url'], download=False)
-        if not info or info.get('_type') in ('playlist','multi_video'):
-            raise ValueError('Select a single public video.')
-        if (info.get('age_limit') or 0) > 0 or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'):
-            raise ValueError('The source requires restricted access. Use its official viewing page.')
+        if info and info.get('_type') in ('playlist','multi_video'):
+            info = next((entry for entry in info.get('entries',[]) if entry), None)
+        if not info:
+            raise ValueError('No media was returned for this URL.')
+        restricted = bool(info.get('age_limit') or info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'))
         if request.get('download'):
             by_id = {str(item.get('format_id')): item for item in info.get('formats', [])}
             tracks = [by_id.get(part) for part in format_ids]
-            if any(not track or track.get('has_drm') or track.get('protocol') not in ('http', 'https') for track in tracks):
-                raise ValueError('This format is no longer a supported public direct media format.')
+            if any(not track for track in tracks):
+                raise ValueError('The selected format disappeared. Analyze again.')
             if len(tracks) == 2 and not (
                 tracks[0].get('vcodec') not in (None, 'none') and tracks[0].get('acodec') == 'none'
                 and tracks[1].get('vcodec') == 'none' and tracks[1].get('acodec') not in (None, 'none')
@@ -68,35 +82,44 @@ def worker(request):
             return {'complete':True}
         formats = []
         for x in info.get('formats') or []:
-            if x.get('has_drm') or x.get('protocol') not in ('http','https') or x.get('ext') not in EXTENSIONS:
+            if not x.get('url'):
                 continue
             if not re.fullmatch(r'[\w.-]+', str(x.get('format_id',''))):
                 continue
-            formats.append(dict(id=str(x['format_id']), ext=x['ext'], height=x.get('height'),
+            formats.append(dict(id=str(x['format_id']), ext=x.get('ext') or 'bin', height=x.get('height'),
                                 size=x.get('filesize') or x.get('filesize_approx'),
-                                label=x.get('format_note') or x.get('format') or x['ext'],
+                                label=x.get('format_note') or x.get('format') or x.get('ext') or 'Original',
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
-                                method='extractor'))
-        audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
+                                drm=bool(x.get('has_drm')), permitted=True, protocol=x.get('protocol'), url=x.get('url'), tbr=x.get('tbr'), method='extractor'))
+        for f in formats:
+            if f['drm']:
+                f['label'] += ' · DRM'
+        audio = next((f for f in sorted(formats, key=lambda f: (bool(f.get('drm')), -(f.get('tbr') or 0))) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
             for f in formats:
                 if f['video'] and not f['audio']:
                     size = f['size'] + audio['size'] if f['size'] and audio['size'] else None
                     combinations.append(dict(f, id=f['id'] + '+' + audio['id'], ext='mkv', size=size,
-                                             label=f['label'] + ' with audio', audio=True))
+                                             label=f['label'] + ' with audio' + (' · DRM' if audio.get('drm') and not f.get('drm') else ''), audio=True, drm=f.get('drm') or audio.get('drm')))
             formats = combinations + formats
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
-                    extractor=info.get('extractor_key'))
+                    extractor=info.get('extractor_key'), restricted=restricted,
+                    subtitles=[{'language': lang, 'label': lang} for lang in (info.get('subtitles') or {})])
 
 
 def analyze(value, proxy):
     value = url(value)
     if not value:
         raise ValueError('Enter a public video or webpage URL.')
-    network.target(value)
+    try:
+        network.target(value)
+    except network.SourceError as exc:
+        if 'resolved' not in str(exc):
+            raise
+        return dict(title='Video',url=value,formats=[],notice=str(exc),status='Analysis unavailable')
     p = urlsplit(value)
     if p.hostname in ('archive.org','www.archive.org') and p.path.startswith(('/details/','/download/')):
         ident = unquote(p.path.split('/')[2])
@@ -132,16 +155,16 @@ def analyze(value, proxy):
                     license=text(meta.get('LicenseUrl',{}).get('value')), creators=[text(meta.get('Artist',{}).get('value'))],
                     thumbnail=url(v.get('thumburl')), formats=formats)
     else:
-        request = dict(url=value, proxy=proxy)
+        request = dict(url=value, proxy=proxy, cookies=COOKIE_BROWSER)
         try:
             proc = subprocess.run(worker_args(), input=json.dumps(request), text=True, capture_output=True, timeout=50,
                                   creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             if proc.returncode:
                 return {'title':'Video at '+p.hostname, 'url':value, 'formats':[], 'status':'Unsupported or inaccessible',
-                        'notice':'The source did not expose supported public video metadata. Open the original page; login, DRM and other access controls are not bypassed.'}
+                        'notice':next((line.strip() for line in reversed(proc.stderr.splitlines()) if line.strip()), 'The extractor returned no media metadata.')}
             info = json.loads(proc.stdout)
         except subprocess.TimeoutExpired:
-            raise ValueError('Link analysis timed out. Try the official video page.')
+            return dict(title='Video at '+p.hostname,url=value,formats=[],notice='Link analysis timed out. Retry or open the original page.',restricted=False)
     info.update(url=value, source=p.hostname, analyzed=time.time())
     info['status'] = 'Download available' if info.get('formats') else 'Metadata only'
     direct = next((f['url'] for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('video') and f['ext'] in ('mp4','webm','ogv')), None)

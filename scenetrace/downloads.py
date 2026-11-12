@@ -5,9 +5,11 @@ import queue
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from . import network, media
 
@@ -51,12 +53,13 @@ class DownloadManager:
         self.store.job(j)
 
     def add(self, info, fmt, destination, authorized=False, output='original'):
-        if not authorized:
-            raise ValueError('Confirm that you own the media or the source and rights holder authorize this download.')
         if output not in ('original','mp4','mp3'):
             raise ValueError('Choose Original, MP4 or MP3.')
         if output != 'original' and not media.ffmpeg_path():
             raise ValueError('FFmpeg is unavailable. Choose Original format.')
+        fmt = dict(fmt)
+        if not re.fullmatch(r'[A-Za-z0-9]{1,16}', str(fmt.get('ext', ''))):
+            fmt['ext'] = 'bin'
         folder = Path(destination).expanduser().resolve()
         if not folder.is_dir():
             raise ValueError('Choose an existing destination folder.')
@@ -65,8 +68,10 @@ class DownloadManager:
             raise ValueError('There is not enough free space in the destination.')
         key = uuid.uuid4().hex
         ext = fmt['ext'] if output == 'original' else output
-        name = safe_name(info['title'])
-        suffix = '.' + fmt['ext']
+        template = self.store.setting('filename_template', '%(title)s [%(height)sp].%(ext)s')
+        fields = dict(title=info['title'], height=fmt.get('height') or 'original', ext=ext, uploader=', '.join(info.get('creators') or []))
+        name = safe_name(re.sub(r'%\((title|height|ext|uploader)\)s', lambda match: str(fields[match[1]]), template))
+        suffix = '.' + ext
         if name.lower().endswith(suffix.lower()):
             name = name[:-len(suffix)]
         final = folder / (name + '.' + ext)
@@ -83,8 +88,9 @@ class DownloadManager:
         else:
             raise ValueError('Could not allocate a free destination filename.')
         part = folder/('.scenetrace-'+key+'.'+fmt['ext'])
-        j = dict(id=key, title=info['title'], source=info['url'], extractor_url=info['url'],
-                 format=fmt, output=output, destination=str(folder), path=str(final), part=str(part),
+        j = dict(id=key, title=info['title'], source=info['url'], extractor_url=fmt.get('extractor_url') or info['url'],
+                 format=fmt, output=output, subtitles=info.get('selected_subtitles', []),
+                 subtitle_tracks=info.get('subtitles', []), metadata={k:info.get(k) for k in ('title','url','creators','duration','license')}, destination=str(folder), path=str(final), part=str(part),
                  temporary=str(part)+'.converted.'+ext, status='queued', bytes=0, total=fmt.get('size'),
                  speed=None, eta=None, progress=None, error='', created=time.time(), etag='')
         with self.lock:
@@ -155,6 +161,36 @@ class DownloadManager:
                     original = Path(j['temporary'])
                 os.replace(original, j['path'])
                 j.update(status='completed', bytes=Path(j['path']).stat().st_size, progress=100, eta=0)
+                try:
+                    metadata = j.get('metadata') or {}
+                    root = ET.Element('movie')
+                    for key, tag in (('title','title'),('url','source'),('creators','uploader'),('duration','duration'),('license','license')):
+                        value = metadata.get(key)
+                        if value:
+                            ET.SubElement(root, tag).text = ', '.join(value) if isinstance(value, list) else str(value)
+                    if len(root):
+                        sidecar = Path(j['path']).with_suffix('.nfo')
+                        if sidecar.exists():
+                            sidecar = Path(j['path'] + '.nfo')
+                        with sidecar.open('xb') as out:
+                            out.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+                    if j['format'].get('method') == 'direct':
+                        for track in j.get('subtitle_tracks', []):
+                            if track.get('language') not in j.get('subtitles', []) or not track.get('url'):
+                                continue
+                            content, mime, final = network.fetch(track['url'], limit=4*1024*1024)
+                            suffix = 'vtt' if content.lstrip(b'\xef\xbb\xbf \r\n').startswith(b'WEBVTT') else 'srt'
+                            destination = Path(j['path'] + '.' + track['language'] + '.' + suffix)
+                            with destination.open('xb') as out:
+                                out.write(content)
+                    for lang in j.get('subtitles', []):
+                        for subtitle in Path(j['part']).parent.glob(Path(j['part']).stem + '.' + lang + '.*'):
+                            destination = Path(j['path'] + '.' + lang + subtitle.suffix)
+                            with destination.open('xb') as out:
+                                out.write(subtitle.read_bytes())
+                            subtitle.unlink()
+                except (OSError, ValueError) as exc:
+                    j['notice'] = 'Media completed; sidecar could not be saved: ' + str(exc)
                 self._cleanup(j, reserve=False)
             except InterruptedError:
                 if j['status'] not in ('cancelled','paused'):
@@ -228,9 +264,10 @@ class DownloadManager:
             conn.close()
 
     def _extractor(self, j):
-        req = dict(url=j['extractor_url'], proxy=self.proxy, download=True, format_id=j['format']['id'], output=j['part'])
+        req = dict(url=j['extractor_url'], proxy=self.proxy, cookies=media.COOKIE_BROWSER, download=True, subtitles=j.get('subtitles', []), format_id=j['format'].get('extractor_id', j['format']['id']), output=j['part'])
+        errors = tempfile.TemporaryFile(mode='w+t', encoding='utf-8')
         proc = subprocess.Popen(media.worker_args(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, text=True, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+                                stderr=errors, text=True, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         proc.stdin.write(json.dumps(req))
         proc.stdin.close()
         def read():
@@ -251,31 +288,59 @@ class DownloadManager:
                 self.events[j['id']].wait(.2)
             reader.join(timeout=2)
             if proc.returncode:
-                raise ValueError('The source could not deliver this format. Analyze again, select another format or open the official page.')
+                if j['format'].get('drm'):
+                    raise ValueError('Protected stream. yt-dlp could not decrypt it.')
+                errors.seek(0)
+                detail = next((line.strip() for line in reversed(errors.read().splitlines()) if line.strip()), 'No extractor diagnostic was returned.')
+                raise ValueError('The source could not deliver this format. ' + detail)
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
+            errors.close()
 
     def _convert(self, j):
         j['status'] = 'converting'
         self.persist(j)
         args = [media.ffmpeg_path(),'-nostdin','-hide_banner','-loglevel','error','-y',
                 '-protocol_whitelist','file,pipe','-i',j['part'],'-threads','2']
-        args += ['-vn','-c:a','libmp3lame','-q:a','2'] if j['output']=='mp3' else ['-c:v','libx264','-preset','veryfast','-crf','23','-c:a','aac','-movflags','+faststart']
+        copy = False
+        probe = shutil.which('ffprobe')
+        sibling = Path(media.ffmpeg_path()).with_name('ffprobe.exe' if os.name == 'nt' else 'ffprobe')
+        if sibling.is_file():
+            probe = str(sibling)
+        if j['output'] == 'mp4' and probe:
+            try:
+                result = subprocess.run([probe, '-v', 'error', '-show_streams', '-show_format', '-of', 'json', j['part']],
+                                        capture_output=True, text=True, timeout=15,
+                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                if result.returncode == 0:
+                    data = json.loads(result.stdout)
+                    streams = data.get('streams', [])
+                    copy = bool(streams) and any(x in data.get('format', {}).get('format_name', '').split(',') for x in ('mp4', 'mpegts')) and all(
+                        stream.get('codec_name') in ('h264', 'aac') for stream in streams)
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass  # Optional optimization; encoding remains available.
+        args += (['-vn','-c:a','libmp3lame','-q:a','2'] if j['output']=='mp3' else
+                 ['-c','copy','-movflags','+faststart'] if copy else
+                 ['-c:v','libx264','-preset','veryfast','-crf','23','-c:a','aac','-movflags','+faststart'])
         args += [j['temporary']]
-        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        errors = tempfile.TemporaryFile(mode='w+t', encoding='utf-8')
+        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=errors,
                                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         try:
             while proc.poll() is None:
                 self._check(j)
                 self.events[j['id']].wait(.2)
             if proc.returncode:
-                raise ValueError('Conversion failed. Retry with Original format.')
+                errors.seek(0)
+                detail = next((line.strip() for line in reversed(errors.read().splitlines()) if line.strip()), 'No FFmpeg diagnostic was returned.')
+                raise ValueError('Conversion failed. ' + detail)
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
+            errors.close()
 
     def close(self):
         self.stopping.set()
