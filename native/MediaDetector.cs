@@ -23,6 +23,32 @@ namespace SceneTrace
         private readonly ToolStripDropDownButton detector = new ToolStripDropDownButton("↓ Video") { ToolTipText = "Detect video and inspect download formats", AccessibleName = "Video detector" };
         private readonly HashSet<BrowserTab> scanning = new HashSet<BrowserTab>();
 
+        private readonly HashSet<BrowserTab> playingMedia = new HashSet<BrowserTab>();
+        private async Task InstallMediaObserver(BrowserTab tab)
+        {
+            var core = tab.View.CoreWebView2;
+            var receiver = core.GetDevToolsProtocolEventReceiver("Runtime.bindingCalled");
+            receiver.DevToolsProtocolEventReceived += (sender, args) => {
+                if (tab.Closed || tab.Trusted || args.ParameterObjectAsJson.Length > 262144) return;
+                try {
+                    var message = json.Deserialize<Dictionary<string,object>>(args.ParameterObjectAsJson);
+                    if ((string)message["name"] != "__scenetraceMedia") return;
+                    var data = json.Deserialize<Dictionary<string,object>>((string)message["payload"]);
+                    if ((bool)data["hasVideo"]) videoElements.Add(tab);
+                    if ((bool)data["playing"]) playingMedia.Add(tab);
+                    foreach (Dictionary<string,object> item in ((IEnumerable)data["items"]).Cast<object>().Take(128))
+                        AddMedia(tab,(string)item["url"],(string)item["title"],(string)item["kind"],(bool)item["ad"]);
+                    UpdateDetector();
+                } catch (Exception) { /* Untrusted telemetry never invokes application commands. */ }
+            };
+            await core.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
+            await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", json.Serialize(new {name="__scenetraceMedia",executionContextName="SceneTraceMedia"}));
+            string script;
+            using (var input=typeof(BrowserWindow).Assembly.GetManifestResourceStream("SceneTrace.Browser.MediaObserver.js"))
+            using (var reader=new StreamReader(input)) script=reader.ReadToEnd();
+            await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument",json.Serialize(new {source=script,worldName="SceneTraceMedia"}));
+        }
+
         private void SetupDetector()
         {
             tools.Items.Add(detector);
@@ -89,7 +115,7 @@ namespace SceneTrace
             var tab=Current;
             int count=tab!=null&&detected.TryGetValue(tab,out var items)?items.Values.Count(x=>!x.Advertisement):0;
             detector.Text=count>0?"↓ "+count:"↓ Video";
-            detector.ToolTipText=count>0?"Media detected: "+count:tab!=null&&videoElements.Contains(tab)?"Video detected. No compatible download found.":"Inspect this page for video";
+            detector.ToolTipText=(tab!=null&&playingMedia.Contains(tab)?"Playback observed · ":"")+(count>0?"Media detected: "+count:tab!=null&&videoElements.Contains(tab)?"Player observed. No compatible download found.":"Inspect this page for video");
         }
         private void BuildDetectorMenu()
         {
@@ -97,7 +123,7 @@ namespace SceneTrace
             var tab=Current;
             if(tab==null||tab.Trusted){detector.DropDownItems.Add("Open a website to detect videos").Enabled=false;return;}
             var items=MediaFor(tab).Values.OrderBy(x=>x.Advertisement).ToArray();
-            detector.DropDownItems.Add(items.Length>0?"Media detected: "+items.Length:videoElements.Contains(tab)?"Video detected. No compatible download found.":"No media detected yet").Enabled=false;
+            detector.DropDownItems.Add(items.Length>0?"Media detected: "+items.Length:videoElements.Contains(tab)?"Player observed. No compatible download found.":"No media detected yet").Enabled=false;
             foreach(var item in items)
             {
                 var menu=new ToolStripMenuItem((item.Advertisement?"Possible advertisement · ":"")+ShortMediaTitle(item.Title)+" · "+item.Kind);
@@ -119,9 +145,9 @@ namespace SceneTrace
             {
                 var result=json.Deserialize<Dictionary<string,object>>(await Post("analyze",new { url=item.Url }));
                 var formats=((IEnumerable)result["formats"]).Cast<Dictionary<string,object>>().ToArray();
-                using(var dialog=new Form {Text="Download detected media",Width=520,Height=310,StartPosition=FormStartPosition.CenterParent,BackColor=BackColor,ForeColor=ForeColor,Font=Font,MinimizeBox=false,MaximizeBox=false})
+                using(var dialog=new Form {Text="Download detected media",Width=520,Height=370,StartPosition=FormStartPosition.CenterParent,BackColor=BackColor,ForeColor=ForeColor,Font=Font,MinimizeBox=false,MaximizeBox=false})
                 {
-                    var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(18),ColumnCount=1,RowCount=6};dialog.Controls.Add(layout);
+                    var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(18),ColumnCount=1,RowCount=8};dialog.Controls.Add(layout);
                     layout.Controls.Add(new Label{Text=ShortMediaTitle(item.Title),AutoSize=true});
                     if(formats.Length==0)
                     {
@@ -129,13 +155,16 @@ namespace SceneTrace
                         var original=new Button{Text="Open original page",AutoSize=true};original.Click+=(s,e)=>{dialog.Close();tabs.SelectedTab=tab.Page;};layout.Controls.Add(original);dialog.ShowDialog(this);return;
                     }
                     var choices=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Dock=DockStyle.Fill};
-                    foreach(var format in formats)choices.Items.Add((format.TryGetValue("height",out var height)&&height!=null?height+"p · ":"")+format["ext"]+" · "+format["label"]);
+                    foreach(var format in formats)choices.Items.Add((format.TryGetValue("height",out var height)&&height!=null?height+"p · ":"")+format["ext"]+" · "+format["label"]+" · "+(format.TryGetValue("audio",out var audio)&&Equals(audio,true)?"with audio":"no reported audio")+ (format.TryGetValue("size",out var size)&&size!=null?" · "+size+" bytes":""));
                     choices.SelectedIndex=0;layout.Controls.Add(choices);
+                    layout.Controls.Add(new Label{Text="Source: "+new Uri(item.Url).Host,AutoSize=true});
                     string folder=downloadFolder;
                     var folderLabel=new Label{Text=folder,AutoSize=true,MaximumSize=new System.Drawing.Size(460,0)};layout.Controls.Add(folderLabel);
                     var choose=new Button{Text="Choose folder…",AutoSize=true};choose.Click+=(s,e)=>{using(var picker=new FolderBrowserDialog{SelectedPath=folder})if(picker.ShowDialog(dialog)==DialogResult.OK){folder=picker.SelectedPath;folderLabel.Text=folder;}};layout.Controls.Add(choose);
-                    var start=new Button{Text="Download",AutoSize=true};layout.Controls.Add(start);
-                    start.Click+=async(s,e)=>{start.Enabled=false;try{await Post("download/add",new {analysis_id=result["analysis_id"],format_id=formats[choices.SelectedIndex]["id"],destination=folder});dialog.Close();SelectApp("downloads");}catch(Exception){MessageBox.Show(dialog,"The transfer could not start. Refresh this video or choose another folder.");start.Enabled=true;}};
+                    var permission=new CheckBox{Text="I am authorized to save this media.",AutoSize=true};layout.Controls.Add(permission);
+                    var start=new Button{Text="Download",AutoSize=true,Enabled=false};layout.Controls.Add(start);
+                    permission.CheckedChanged+=(s,e)=>start.Enabled=permission.Checked;
+                    start.Click+=async(s,e)=>{start.Enabled=false;try{await Post("download/add",new {analysis_id=result["analysis_id"],format_id=formats[choices.SelectedIndex]["id"],destination=folder,authorized=true});dialog.Close();SelectApp("downloads");}catch(Exception){MessageBox.Show(dialog,"The transfer could not start. Refresh this video or choose another folder.");start.Enabled=true;}};
                     dialog.ShowDialog(this);
                 }
             }

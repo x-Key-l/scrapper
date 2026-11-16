@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import time
 import urllib.request
@@ -27,12 +28,17 @@ def post(address, path, body):
 
 
 with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_errors=True) as profile:
+    fixture_root = Path(profile)/'fixtures'
+    shutil.copytree('tests/browser-fixtures',fixture_root)
+    import imageio_ffmpeg
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-f','lavfi','-i','color=c=blue:s=96x64:r=10','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',str(fixture_root/'observer.mp4')],check=True)
+    (fixture_root/'observer.html').write_text('<!doctype html><title>Dynamic frame fixture</title><script>setTimeout(()=>{const v=document.createElement("video");v.muted=true;v.autoplay=true;v.src="/observer.mp4";document.body.append(v);},300);</script><body></body>')
     reports = []
     for index in range(2):
         report = artifacts / ('cold.json' if index == 0 else 'warm.json')
         report.unlink(missing_ok=True)
         env = dict(os.environ, SCENETRACE_DATA=profile, SCENETRACE_BROWSER_REPORT=str(report),
-                   SCENETRACE_TEST_FIXTURES=str(Path('tests/browser-fixtures').resolve()),
+                   SCENETRACE_TEST_FIXTURES=str(fixture_root.resolve()),
                    SCENETRACE_QA_DOWNLOAD_PORT=str(fixture_server.server_port))
         started = time.perf_counter()
         process = subprocess.Popen([str(exe)], env=env)

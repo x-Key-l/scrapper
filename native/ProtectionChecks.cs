@@ -44,6 +44,12 @@ namespace SceneTrace
                     throw new InvalidOperationException("Unsolicited popup was not suppressed: userGesture="+popupGesture+", handled="+popupHandled+", tabs="+popupBefore+"→"+openTabs.Count);
             }
             finally{tab.View.CoreWebView2.NewWindowRequested-=popupObserver;}
+            int gestureBefore=openTabs.Count;
+            int blocksBefore=blockedRequests[tab];
+            await tab.View.CoreWebView2.ExecuteScriptAsync("window.open('https://ads.scorecardresearch.com/scenetrace-qa-click-popup','_blank')");
+            await AwaitCondition(()=>blockedRequests[tab]>blocksBefore,"click-triggered advertising popup blocking");
+            if(openTabs.Count!=gestureBefore)throw new InvalidOperationException("A user-gesture advertising popup created a tab.");
+            checks.Add("Known advertising popup blocked even with WebView2 user activation");
             await WaitFor(tab,"document.querySelector('video').currentTime>1 && document.querySelector('video').videoWidth>0");
             checks.Add("Actual media response and HTML5 video detected; duplicate URLs collapsed; known advertising request and popup blocked; per-site allowlist and media exemption passed; video frames continue");
             var item=MediaFor(tab).Values.First(x=>x.Url.Contains("mov_bbb.mp4"));

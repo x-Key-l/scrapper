@@ -93,10 +93,20 @@ namespace SceneTrace
         }
         private bool BlockPopup(BrowserTab tab,CoreWebView2NewWindowRequestedEventArgs e)
         {
-            if(!ShieldEnabled(tab)||e.IsUserInitiated||!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)||!IsAdDomain(uri.Host))return false;
+            if(!ShieldEnabled(tab)||!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)||!IsAdDomain(uri.Host))return false;
             blockedRequests[tab]=(blockedRequests.TryGetValue(tab,out int count)?count:0)+1;
             status.Text="Advertising popup blocked. Use the shield to allow this site.";return true;
         }
+        private bool BlockRedirect(BrowserTab tab, CoreWebView2NavigationStartingEventArgs e)
+        {
+            // A typed address is intentional. A redirect to a known advertising
+            // domain is not made trustworthy by an earlier player click.
+            if (!e.IsRedirected || !ShieldEnabled(tab) || !Uri.TryCreate(e.Uri,UriKind.Absolute,out var target) || !IsAdDomain(target.Host)) return false;
+            blockedRequests[tab]=(blockedRequests.TryGetValue(tab,out int count)?count:0)+1;
+            status.Text="Advertising redirect blocked. Use the shield to allow this site.";
+            return true;
+        }
+
         private void SaveShieldSettings()
         {
             Directory.CreateDirectory(profile);

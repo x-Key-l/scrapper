@@ -76,6 +76,11 @@ namespace SceneTrace
                     ",{method:'POST',headers:{'Content-Type':'application/json','X-SceneTrace':'local'},body:'{}'}).then(r=>window.isolationResult=r.ok?'leaked':'blocked').catch(()=>window.isolationResult='blocked')");
                 await WaitFor(tab, "window.isolationResult === 'blocked'");
                 checks.Add("External website native bridge and local API requests blocked");
+                tab.View.CoreWebView2.SetVirtualHostNameToFolderMapping("frame.scenetrace.test",fixture,CoreWebView2HostResourceAccessKind.DenyCors);
+                await tab.View.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.createElement('iframe');f.src='https://frame.scenetrace.test/observer.html';document.body.append(f);})()");
+                await AwaitCondition(()=>MediaFor(tab).Values.Any(x=>x.Url.Contains("frame.scenetrace.test/observer.mp4")) && videoElements.Contains(tab) && playingMedia.Contains(tab),"isolated-world dynamic cross-origin playback observation");
+                checks.Add("Actual cross-origin delayed video playback observed without enabling the external application bridge");
+
                 tab.View.CoreWebView2.Navigate("https://fixture.scenetrace.test/two.html");
                 await WaitFor(tab, "document.title === 'SceneTrace browser fixture two'");
                 tab.View.GoBack();
@@ -119,6 +124,18 @@ namespace SceneTrace
                 tabs.SelectedTab = tab.Page;
                 await WaitFor(tab, "document.title === 'SceneTrace browser fixture two'");
                 checks.Add("Lazy tabs preserve independent navigation");
+                CloseTab(lazy);RestoreClosedTab();
+                var restored=Current;
+                await EnsureTab(restored);
+                restored.View.CoreWebView2.SetVirtualHostNameToFolderMapping("fixture.scenetrace.test",fixture,CoreWebView2HostResourceAccessKind.DenyCors);
+                restored.View.CoreWebView2.Navigate(restored.Pending);
+                await WaitFor(restored,"document.title === 'SceneTrace browser fixture one'");
+                for(int cycle=0;cycle<12;cycle++) { tabs.SelectedTab=tab.Page;tabs.SelectedTab=restored.Page; }
+                await ActivateTab();
+                if(Current!=restored || !restored.View.Visible)throw new InvalidOperationException("Rapid tab switching lost the active tab.");
+                CloseTab(restored);tabs.SelectedTab=tab.Page;
+                checks.Add("Close/restore and repeated tab switching preserve the active browser");
+
                 for (int i = 0; i < 3; i++) CreateTab("https://fixture.scenetrace.test/one.html");
                 measurements.Add(BrowserMemory("Five website tabs with four inactive"));
                 foreach (var extra in openTabs.Where(t => !t.Trusted && t != tab).ToArray()) CloseTab(extra);

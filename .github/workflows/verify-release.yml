@@ -1,7 +1,7 @@
 name: Verify and package SceneTrace
 on:
   push:
-    branches: [main]
+    branches: [main, codex/scenetrace-unified-v5]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -106,6 +106,8 @@ jobs:
       - run: npx playwright install chromium --with-deps --only-shell
       - name: Verify real search-to-watch workflows
         run: node scripts/video-e2e.cjs
+      - name: Verify delayed and cross-origin media observation
+        run: node scripts/detector-test.cjs
       - name: Exercise the real browser application
         run: npm run test:ui
       - uses: actions/upload-artifact@v4

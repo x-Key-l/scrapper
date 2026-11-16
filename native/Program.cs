@@ -68,6 +68,7 @@ namespace SceneTrace
         private readonly ToolStripTextBox find = new ToolStripTextBox { AutoSize = false, Width = 130 };
         private readonly ToolStripStatusLabel status = new ToolStripStatusLabel { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
         private readonly ToolStripProgressBar progress = new ToolStripProgressBar { Style = ProgressBarStyle.Marquee, Visible = false };
+        private readonly List<string> closedTabUrls = new List<string>();
         private readonly List<BrowserTab> openTabs = new List<BrowserTab>();
         private readonly System.Windows.Forms.Timer activity = new System.Windows.Forms.Timer { Interval = 1000 };
         private CoreWebView2Environment environment;
@@ -113,6 +114,7 @@ namespace SceneTrace
             AddMenu(actions, "Inspect current video", () => SendToApp("inspect"));
             AddMenu(actions, "Save current page", () => SendToApp("save-page"));
             AddMenu(actions, "Open in external browser", OpenExternal);
+            AddMenu(actions, "Restore closed tab (Ctrl+Shift+T)", RestoreClosedTab);
             SetupShield();
             SetupDetector();
             tools.Items.Add(actions);
@@ -244,8 +246,10 @@ namespace SceneTrace
             if (environment == null || closing) return;
             var selected = Current;
             if (selected == null) return;
-            foreach (var other in openTabs.Where(t => t != selected && t.View?.CoreWebView2 != null))
+            foreach (var other in openTabs.Where(t => t != selected && t.View?.CoreWebView2 != null).ToArray())
             {
+                if (selected != Current || selected.Closed) return;
+                if (other.Closed || other.View == null) continue;
                 other.View.Visible = false;
                 if (!other.Trusted)
                 {
@@ -253,7 +257,7 @@ namespace SceneTrace
                 }
             }
             await EnsureTab(selected);
-            if (selected.Closed || selected.View == null) return;
+            if (selected != Current || selected.Closed || selected.View?.CoreWebView2 == null) return;
             selected.View.Visible = true;
             try { selected.View.CoreWebView2.Resume(); } catch (Exception) { }
             UpdateChrome(selected);
@@ -284,10 +288,12 @@ namespace SceneTrace
                     if (tab.Trusted) {e.Handled=true;if(AllowedWebsite(e.Uri))Open(e.Uri,true);return;}
                     if (BlockPopup(tab,e)) {e.Handled=true;return;}
                     if (e.Uri != "about:blank" && !AllowedWebsite(e.Uri)) {e.Handled=true;return;}
+                    e.Handled=true;
                     var deferred=e.GetDeferral();
                     try {
                         var popup=CreateTab(e.Uri);
                         await EnsureTab(popup,false);
+                        if (tab.Closed || popup.Closed || popup.View?.CoreWebView2 == null) { CloseTab(popup); return; }
                         e.NewWindow=popup.View.CoreWebView2;
                         e.Handled=true;
                         tabs.SelectedTab=popup.Page;
@@ -304,7 +310,8 @@ namespace SceneTrace
                 core.DownloadStarting += (s, e) => TrackDownload(tab, e);
                 core.WebResourceResponseReceived += (s, e) => ObserveMedia(tab, e);
                 core.NavigationStarting += (s, e) => {
-                    if (!tab.Trusted && !e.IsRedirected) { detected.Remove(tab); videoElements.Remove(tab); blockedRequests[tab] = 0; UpdateDetector(); }
+                    if (BlockRedirect(tab,e)) { e.Cancel=true; return; }
+                    if (!tab.Trusted && !e.IsRedirected) { detected.Remove(tab); videoElements.Remove(tab); playingMedia.Remove(tab); blockedRequests[tab] = 0; UpdateDetector(); }
                     bool allowed = tab.Trusted ? IsApp(e.Uri) : e.Uri == "about:blank" || AllowedWebsite(e.Uri);
                     if (!allowed)
                     {
@@ -343,7 +350,8 @@ namespace SceneTrace
                 core.SourceChanged += (s, e) => UpdateChrome(tab);
                 core.ProcessFailed += (s, e) => { status.Text = "This browser tab stopped. Press Refresh to restore it."; tab.Loading = false; };
                 if (tab.Trusted) core.WebMessageReceived += ReceiveMessage;
-                if (navigate) core.Navigate(tab.Pending);
+                if (!tab.Trusted) await InstallMediaObserver(tab);
+                if (navigate && !tab.Closed) core.Navigate(tab.Pending);
             }
             catch { view.Dispose(); tab.View = null; throw; }
             finally { tab.Creating = false; }
@@ -464,7 +472,9 @@ namespace SceneTrace
 
         private void CloseTab(BrowserTab tab)
         {
-            if (tab == null || tab.Trusted) return;
+            if (tab == null || tab.Trusted || tab.Closed || tab.DownloadOnly) return;
+            var closedUrl=tab.View?.CoreWebView2?.Source ?? tab.Pending;
+            if (AllowedWebsite(closedUrl)) { closedTabUrls.Add(closedUrl); if(closedTabUrls.Count>20)closedTabUrls.RemoveAt(0); }
             if (nativeTransfers.Values.Any(t=>t.Tab==tab && (t.Operation.State==CoreWebView2DownloadState.InProgress || t.Operation.CanResume)))
             {
                 tab.DownloadOnly=true;
@@ -478,10 +488,17 @@ namespace SceneTrace
             tab.Page.Dispose();
         }
 
+        private void RestoreClosedTab()
+        {
+            if (closedTabUrls.Count==0) return;
+            int last=closedTabUrls.Count-1;
+            string value=closedTabUrls[last];closedTabUrls.RemoveAt(last);Open(value,true);
+        }
+
         private void DisposeTab(BrowserTab tab)
         {
             tab.Closed = true;
-            detected.Remove(tab); videoElements.Remove(tab); blockedRequests.Remove(tab); scanning.Remove(tab);
+            detected.Remove(tab); videoElements.Remove(tab); playingMedia.Remove(tab); blockedRequests.Remove(tab); scanning.Remove(tab);
             tab.View?.Dispose();
             tab.View = null;
         }
@@ -500,6 +517,7 @@ namespace SceneTrace
         {
             if (keyData == (Keys.Control | Keys.L)) { address.Focus(); address.SelectAll(); return true; }
             if (keyData == (Keys.Control | Keys.F)) { find.Visible=true;find.Focus(); find.SelectAll(); return true; }
+            if (keyData == (Keys.Control | Keys.Shift | Keys.T)) { RestoreClosedTab(); return true; }
             if (keyData == (Keys.Control | Keys.W)) { CloseTab(Current); return true; }
             if (keyData == (Keys.Control | Keys.T)) { Open("https://www.wikipedia.org/", true); return true; }
             if (keyData == Keys.F5) { Reload(); return true; }
