@@ -33,9 +33,9 @@ Deliberately excluded: automatic cookie-profile loading, pretending every URL-be
 ## Verification in Codex Cloud
 
 - PR #4 baseline: 106 tests passed.
-- Integrated portable suite: 110 tests passed. Actual generated, authorized direct MP4, HLS, DASH and separate audio/video downloads complete through HTTP/yt-dlp and decode with FFmpeg. Conversion and range/rate-limit recovery also run.
+- Integrated portable suite after recovery: 111 tests passed. Actual generated, authorized direct MP4, HLS, DASH and separate audio/video downloads complete through HTTP/yt-dlp and decode with FFmpeg. Conversion and range/rate-limit recovery also run.
 - Chromium application UI: passed onboarding, import/search/save, navigation, library controls, desktop/mobile layout, and JavaScript-error checks.
-- Portable observer: actual cross-origin delayed HTML5 playback; blob player-only state; fragment exclusion; idle deduplication passed.
+- Portable observer now uses the native isolated-world CDP setup, verifies that page scripts cannot access its telemetry binding, and covers actual cross-origin delayed HTML5 playback; blob player-only state; fragment exclusion; idle deduplication passed.
 - Source process smoke: startup, assets, duplicate launch, import/search/save, persistence, shutdown/restart.
 - Native .NET 4.8 executable cross-compiled on Linux using SDK 8.0.428: zero warnings/errors. This is not a Windows execution or package verification.
 - New Windows gates exercise dynamic cross-origin playback with the external bridge disabled, click-triggered ad popups, close/restore and repeated tab switching. Existing native file-button/redirect/pause-resume/cancel, library, public playback and packaged restart gates remain.
@@ -46,8 +46,10 @@ Library benchmark on this Cloud instance: 1,000 small metadata fixtures indexed 
 
 ## Remaining release gates
 
-The environment proxy rejects `api.github.com`, `animepahe.ch`, and `hianime.ms` with CONNECT HTTP 403. Their additions were saved to the environment draft, not applied or published by the agent. Git fetch/push and public package downloads are separate capabilities from GitHub API access.
+The recovery preserved all three unpushed changes: Ubuntu 24.04 CI pinning, a real subtitle-transfer/library test, and native failure annotations. The dynamic frame timeout was reproduced locally after replacing Playwright's automatic injection with the native CDP setup. Enabling `Page` before new-document script registration repaired the failing observer test; the Windows gate remains mandatory.
 
-Neither target site's search, episode pages, playback, download controls nor authorized transfer has been verified in this run. A network denial establishes none of those site capabilities. Independently authorized public-provider tests and Windows ZIP verification remain pending Actions execution and inspection. Controlled generated media tests do not substitute for those public tests.
+GitHub API access is now working. Raw CI logs and artifact downloads additionally use `results-receiver.actions.githubusercontent.com` and Azure artifact storage; the currently encountered storage hostname requirements are saved in the environment draft. No environment or release publication was performed by the agent.
+
+Current live HTTP inspection: Animepahe homepage and an episode page returned 200 and exposed an embedded Blogger player plus GoFile download links. HiAnime homepage, Naruto search and a title page responded. Playback, downstream download completion and authorization for those titles remain unverified. Generated authorized MP4/HLS/DASH fixtures, separate-track merging, native website buttons and redirected transfers remain the regression sources. The actual subtitle-transfer test verifies media bytes, VTT/NFO files, FFmpeg decode and Media Library registration.
 
 Do not mark this candidate release-ready until Windows build/package/native checks and the other required gates pass on this exact commit. No Windows ZIP is presented as verified yet. Older-laptop CPU/RSS, five live tabs, native detection/filter overhead, high DPI, long transfers and sleep/wake need actual Windows measurements/owner checks. Existing measurement harnesses produce evidence; no throughput claims are inferred from short local fixtures.
