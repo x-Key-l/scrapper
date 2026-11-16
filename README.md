@@ -1,3 +1,7 @@
+# SceneTrace unified v5 integration candidate
+
+This branch combines the 4.1 browser with selected media-engine improvements. See [integration decisions, current verification, and release blockers](docs/UNIFIED-V5.md). Windows release verification is pending. The release instructions below describe the previous release.
+
 # SceneTrace 4.1
 
 Browse video websites in tabs, search connected sources, identify forgotten titles, and open real episode pages or supported players. Metadata catalogs provide identification evidence; viewing and download availability are checked separately.
