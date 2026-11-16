@@ -25,3 +25,5 @@ button{padding:8px 12px}.panel{padding:17px}.section-title{margin-top:25px}
 #deep-progress{min-height:20px}.deep-grid .card-actions{flex-wrap:wrap}.toolbar{flex-wrap:wrap}
 @media(min-width:900px){.sidebar{width:205px;padding:22px 14px}.shell{margin-left:205px}main{padding:26px 30px}.nav-item{padding:9px 12px}}
 @media(max-width:540px){h1{font-size:25px}.history-row{gap:5px}.history-row small{font-size:11px}.toolbar select{width:100%}}
+
+.media-row{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:14px 8px;border-bottom:1px solid var(--line)}.media-row h3{margin:0}.media-path{font-size:12px;opacity:.7;overflow-wrap:anywhere}.media-row .actions{max-width:240px;flex-wrap:wrap}.media-row input[type=checkbox]{width:18px;height:18px}@media(max-width:800px){.media-row{grid-template-columns:24px 1fr}.media-row .actions{grid-column:2}}

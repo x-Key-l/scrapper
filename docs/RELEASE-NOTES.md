@@ -1,11 +1,15 @@
-# SceneTrace 4.0 · Windows release candidate
+# SceneTrace 4.1 · Windows release candidate
 
-Download **SceneTrace-Windows-x64.zip**, choose **Extract All**, and double-click **SceneTrace.exe** inside the extracted folder. Keep all companion files together. No Python, Node, Git or Docker is needed. Integrated tabs use the installed Microsoft WebView2 runtime; a default-browser fallback is available if it is missing.
+Download **SceneTrace-Windows-x64.zip**, choose **Extract All**, then open **SceneTrace.exe** inside the extracted SceneTrace folder. Keep the included files together. Python, Node, Git and Docker are not required. Integrated tabs reuse the installed Microsoft WebView2 Evergreen Runtime; a default-browser fallback remains available.
 
-This release adds a native tabbed video browser, progressive Quick and Deep Search, fuzzy and alternative title matching, character/cast evidence, public full-text retrieval, and complete search-history management. Existing saved items, sources and settings carry forward.
+**Website downloads no longer get canceled and redirected into the analyzer.** WebView2 handles ordinary download buttons and Save As. Native transfers appear alongside analyzer downloads, and closing their tab keeps active transfers alive. Real popup windows preserve download workflows that depend on their opener.
 
-The HiAnime Naruto regression is fixed: public search returns real title links, and the series page exposes 220 ordered episode links. Its third-party playback and downloads remain unverified. Caminandes provides verified in-app playback and a completed licensed download. Pokémon TV provides exact official episode handoffs. A user-added W3Schools source was searched and played through the real Windows package.
+The **Videos** toolbar control detects compatible media and offers actual reported formats. Compatible direct containers/audio, unencrypted native HLS/DASH and separate audio/video merging use yt-dlp and the included FFmpeg. The **Media Library** organizes completed videos and imported folders independently of transfer history, with source folders, conservative episode recognition, categories, collections and safe moves/renames.
 
-Windows verification exercises actual WebView2 navigation, lazy tabs, bookmarks, isolation from local APIs, renderer-crash recovery, video frames and restart persistence. Source tests and browser workflows must pass before publication. Reports, measured performance and limitations are in **docs/V4-AUDIT.md** and the JSON reports inside the ZIP. Screenshots and a SHA-256 checksum are attached.
+A compact dark browser interface adds the **shield**: cached HaGeZi Light ad/tracker domains, per-site controls and manual updates. Existing search, source connectors, bookmarks, history and settings remain available.
 
-This is a release candidate. Live websites can change, regional restrictions apply, and owner-side testing on modest hardware is still needed. No DRM, authentication, paywall or anti-bot bypass is included. Download availability depends on an eligible source path. Deep Search identifies plausible candidates from available evidence; it does not guarantee scene recognition or universal site compatibility.
+The release gate exercises the actual packaged Windows application, native public MP4/PDF downloads, controlled ZIP transfers and range resume, detection, protection, playback, library organization and restart persistence. Detailed capability reports and measured timings are included in the ZIP. See **docs/V4.1-AUDIT.md** for the precise evidence and limits.
+
+Animepahe's complete episode download workflow and HiAnime third-party playback/downloads remain unverified. Native download repair is not a claim that every source provides a compatible file. DRM and source access controls are not bypassed. Physical high-DPI and older-hardware acceptance, long downloads and sleep/wake still need owner testing.
+
+Quit SceneTrace before upgrading, extract into a new folder, and keep the profile at **%LOCALAPPDATA%\SceneTrace**. The previous 4.0 release remains available for rollback.

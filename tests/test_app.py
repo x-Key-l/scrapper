@@ -112,3 +112,24 @@ def test_connection_test_does_not_overwrite_concurrent_configuration(server):
     actual=server.app.store.source('tvmaze')
     assert actual['name']=='My television catalog' and not actual['enabled']
     assert actual['health']=='Verified'
+
+
+def test_native_download_bridge_requires_host_secret_and_real_completion(server,tmp_path):
+    path='/api/desktop/downloads'
+    assert call(server,path,{'updates':[]})[0]==403
+    assert call(server,path,{'updates':[]},{'X-SceneTrace-Desktop':'wrong'})[0]==403
+    headers={'X-SceneTrace-Desktop':server.app.desktop_token}
+    assert call(server,path,{'updates':[]},{**headers,'Origin':'https://external.example'})[0]==403
+    file=tmp_path/'episode.mp4'
+    update={'id':'c'*32,'title':'Episode 05','source':'https://video.example/episode5',
+            'path':str(file),'status':'completed','bytes':12,'total':12,'can_resume':False}
+    assert call(server,path,{'updates':[update]},headers)[0]==400
+    assert not server.app.library.listing()['items']
+    file.write_bytes(b'actual bytes')
+    assert call(server,path,{'updates':[update]},headers)[0]==200
+    items=json.loads(call(server,'/api/library/list',{})[2])['items']
+    assert len(items)==1 and items[0]['website']=='video.example'
+    assert items[0]['bytes']==12
+    assert call(server,'/api/download/control',{'id':'c'*32,'action':'remove'})[0]==200
+    assert file.read_bytes()==b'actual bytes'
+    assert len(server.app.library.listing()['items'])==1

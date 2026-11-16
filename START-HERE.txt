@@ -1,4 +1,4 @@
-SceneTrace 4.0 for Windows 10/11 x64
+SceneTrace 4.1 for Windows 10/11 x64
 
 1. Right-click SceneTrace-Windows-x64.zip and choose Extract All.
 2. Open the extracted SceneTrace folder.
@@ -10,7 +10,11 @@ Quick Search: search Caminandes and choose Llamigos for direct playback.
 Deep Search: describe a remembered scene, actor or character; refine the results.
 Video Sources: Add Video Website, inspect and review a real test, then save.
 History: delete one or several searches; use Undo for a recent deletion.
-Downloads: eligible files show format and destination controls in the player.
+Downloads: ordinary website buttons work through the browser download dialog.
+Videos button: inspect detected media, select a reported format and choose a folder.
+Shield: view blocked requests, update rules or allow a site if playback breaks.
+Media Library: import folders, edit series/episodes/categories, move or rename files.
+New downloads use website folders by default; change this in Media Library.
 
 The integrated browser uses the installed Microsoft WebView2 runtime. If missing,
 SceneTrace opens your default browser and explains how to install the runtime.

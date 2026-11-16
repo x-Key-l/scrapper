@@ -12,12 +12,18 @@ from email.utils import parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urljoin, urlsplit
 
-USER_AGENT = 'SceneTrace/4.0 (desktop video discovery)'
-WIKIMEDIA_USER_AGENT = 'SceneTrace/4.0 (desktop video discovery; https://github.com/x-Key-l/scrapper)'
+USER_AGENT = 'SceneTrace/4.1 (desktop video discovery)'
+WIKIMEDIA_USER_AGENT = 'SceneTrace/4.1 (desktop video discovery; https://github.com/x-Key-l/scrapper)'
 
 
 class SourceError(ValueError):
     pass
+
+
+class HTTPStatusError(SourceError):
+    def __init__(self,status):
+        self.status=status
+        super().__init__(f'Source returned HTTP {status}. Refresh the source page or check its connection.')
 
 
 class UnsafeURL(SourceError):
@@ -119,7 +125,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
         agent = WIKIMEDIA_USER_AGENT if host == 'wikimedia.org' or host.endswith('.wikimedia.org') else USER_AGENT
         try:
             conn.request(method, (p.path or '/') + ('?' + p.query if p.query else ''), data,
-                         {'Host': p.netloc, 'User-Agent': agent, 'Accept-Encoding': 'identity', **extra})
+                         {'Host': ('['+host+']' if ':' in host else host) + (':'+str(port) if port != (443 if p.scheme=='https' else 80) else ''), 'User-Agent': agent, 'Accept-Encoding': 'identity', **extra})
             r = conn.getresponse()
             if r.status in (301, 302, 303, 307, 308):
                 location = r.getheader('Location')
@@ -136,7 +142,7 @@ def open_url(url, method='GET', data=None, headers=None, timeout=12):
             if r.status == 429:
                 raise RateLimitError(r.getheader('Retry-After'))
             if r.status not in (200, 206):
-                raise SourceError(f'Source returned HTTP {r.status}. Check its status or credentials.')
+                raise HTTPStatusError(r.status)
             return conn, r, url
         except BaseException:
             conn.close()
@@ -211,6 +217,13 @@ class Proxy(BaseHTTPRequestHandler):
             if self.command != 'HEAD':
                 while chunk := r.read(65536):
                     self.wfile.write(chunk)
+        except HTTPStatusError as error:
+            if conn is None: self.send_error(error.status, 'Source response')
+        except RateLimitError as error:
+            if conn is None:
+                self.send_response(429);self.send_header('Retry-After',str(error.delay));self.end_headers()
+        except TrustError:
+            if conn is None: self.send_error(502, 'Certificate validation failed')
         except Exception:
             if conn is None:
                 self.send_error(502, 'Source unavailable')

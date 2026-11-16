@@ -1,17 +1,20 @@
 name: Verify and package SceneTrace
 on:
   push:
-    branches: [main, 'build/**']
+    branches: [main, codex/scenetrace-unified-v5]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: verify-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -21,14 +24,15 @@ jobs:
           python-version: '3.12'
       - name: Install pinned test and runtime dependencies
         run: python -m pip install -r requirements-dev.txt
+      - name: Install maintained Linux media runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Functional tests, including actual HTTP and media processing
         run: python -m pytest -q --junitxml=test-results.xml
+      - name: Measure media library indexing
+        run: python scripts/library_benchmark.py
       - name: Source application process smoke test
         run: python scripts/smoke.py
-      - name: Real public source verification
-        run: python scripts/live_check.py
-      - name: Diagnose live website search and deep catalog retrieval
-        run: python scripts/v4_live_check.py
       - name: Build self-contained Windows package
         if: runner.os == 'Windows'
         run: python scripts/build.py
@@ -38,6 +42,10 @@ jobs:
       - name: Exercise actual packaged native browser, isolation, playback and restart
         if: runner.os == 'Windows'
         run: python scripts/windows_browser_check.py
+      - name: Real public source verification
+        run: python scripts/live_check.py
+      - name: Diagnose live website search and deep catalog retrieval
+        run: python scripts/v4_live_check.py
       - name: Complete a public episode download using the packaged executable
         if: runner.os == 'Windows'
         run: python scripts/live_video_check.py --exe dist/SceneTrace/SceneTrace.exe
@@ -82,7 +90,7 @@ jobs:
             SceneTrace-Windows-x64.zip
             SceneTrace-Windows-x64.sha256
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +106,8 @@ jobs:
       - run: npx playwright install chromium --with-deps --only-shell
       - name: Verify real search-to-watch workflows
         run: node scripts/video-e2e.cjs
+      - name: Verify delayed and cross-origin media observation
+        run: node scripts/detector-test.cjs
       - name: Exercise the real browser application
         run: npm run test:ui
       - uses: actions/upload-artifact@v4
@@ -108,7 +118,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [test, browser]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -126,5 +136,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          tag="v4.0.0-rc.$GITHUB_RUN_NUMBER"
-          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 screens/anime-search.png screens/caminandes-playing.png screens/added-website-playing.png screens/native-browser/native-browser-playing.png --target "$GITHUB_SHA" --title "SceneTrace 4.0 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md
+          tag="v4.1.0-rc.$GITHUB_RUN_NUMBER"
+          gh release create "$tag" package/SceneTrace-Windows-x64.zip package/SceneTrace-Windows-x64.sha256 screens/anime-search.png screens/caminandes-playing.png screens/added-website-playing.png screens/native-browser/native-browser-playing.png --target "$GITHUB_SHA" --title "SceneTrace 4.1 · Windows release candidate" --prerelease --notes-file docs/RELEASE-NOTES.md

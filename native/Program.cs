@@ -17,13 +17,14 @@ namespace SceneTrace
 {
     internal sealed class BrowserTab
     {
-        internal TabPage Page;
+        internal Panel Page;
         internal WebView2 View;
         internal string Pending;
         internal bool Trusted;
         internal bool Loading;
         internal bool Creating;
         internal bool Closed;
+        internal bool DownloadOnly;
         internal long Started;
     }
 
@@ -61,12 +62,13 @@ namespace SceneTrace
         private readonly HttpClient client = new HttpClient(new HttpClientHandler { UseProxy = false });
         private readonly string appOrigin = Environment.GetEnvironmentVariable("SCENETRACE_APP_URL");
         private readonly string profile = Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_PROFILE");
-        private readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
+        private readonly BrowserTabs tabs = new BrowserTabs { Dock = DockStyle.Fill };
         private readonly ToolStrip tools = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, Dock = DockStyle.Top };
-        private readonly ToolStripTextBox address = new ToolStripTextBox { AutoSize = false, Width = 390 };
+        private readonly RoundedAddress address = new RoundedAddress { AutoSize = false, Width = 390 };
         private readonly ToolStripTextBox find = new ToolStripTextBox { AutoSize = false, Width = 130 };
         private readonly ToolStripStatusLabel status = new ToolStripStatusLabel { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
         private readonly ToolStripProgressBar progress = new ToolStripProgressBar { Style = ProgressBarStyle.Marquee, Visible = false };
+        private readonly List<string> closedTabUrls = new List<string>();
         private readonly List<BrowserTab> openTabs = new List<BrowserTab>();
         private readonly System.Windows.Forms.Timer activity = new System.Windows.Forms.Timer { Interval = 1000 };
         private CoreWebView2Environment environment;
@@ -81,13 +83,18 @@ namespace SceneTrace
             if (!Uri.TryCreate(appOrigin, UriKind.Absolute, out var origin) || origin.Scheme != "http" || origin.Host != "127.0.0.1")
                 throw new InvalidOperationException("The SceneTrace local address is missing.");
             Text = "SceneTrace";
+            Font = new Font("Segoe UI", 10F);
+            AutoScaleMode = AutoScaleMode.Dpi;
             Size = new Size(1260, 840);
             MinimumSize = new Size(800, 600);
             BackColor = Color.FromArgb(19, 25, 34);
             ForeColor = Color.White;
             tools.BackColor = BackColor;
             tools.ForeColor = ForeColor;
-            tools.RenderMode = ToolStripRenderMode.System;
+            tools.Renderer = new ChromeRenderer();
+            tools.Padding = new Padding(6,5,6,5);
+            tools.AutoSize = false;
+            tools.Height = 48;
             AddButton("Home", () => SelectApp("home"));
             AddButton("←", () => { if (Current?.View?.CoreWebView2?.CanGoBack == true) Current.View.GoBack(); }, "Back");
             AddButton("→", () => { if (Current?.View?.CoreWebView2?.CanGoForward == true) Current.View.GoForward(); }, "Forward");
@@ -95,11 +102,11 @@ namespace SceneTrace
             tools.Items.Add(address);
             address.AccessibleName = "Website address";
             address.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { NavigateAddress(); e.SuppressKeyPress = true; } };
-            AddButton("Go", NavigateAddress);
-            AddButton("+", () => Open("https://www.wikipedia.org/", true), "New tab");
-            AddButton("×", () => CloseTab(Current), "Close tab");
+
+            tabs.NewRequested += () => Open("https://www.wikipedia.org/", true);
+            tabs.CloseRequested += page => CloseTab(page.Tag as BrowserTab);
             AddButton("☆", Bookmark, "Bookmark page");
-            var actions = new ToolStripDropDownButton("Search & video");
+            var actions = new ToolStripDropDownButton("☰") { ToolTipText = "Search, video and browser menu", AccessibleName = "Browser menu" };
             AddMenu(actions, "Quick search this website", () => SendToApp("quick-site"));
             AddMenu(actions, "Deep search this website", () => SendToApp("deep-site"));
             AddMenu(actions, "Deep search all sources", () => SendToApp("deep-all"));
@@ -107,33 +114,39 @@ namespace SceneTrace
             AddMenu(actions, "Inspect current video", () => SendToApp("inspect"));
             AddMenu(actions, "Save current page", () => SendToApp("save-page"));
             AddMenu(actions, "Open in external browser", OpenExternal);
+            AddMenu(actions, "Restore closed tab (Ctrl+Shift+T)", RestoreClosedTab);
+            SetupShield();
+            SetupDetector();
             tools.Items.Add(actions);
+            AddButton("↓", () => SelectApp("downloads"), "Download Center");
+            AddMenu(actions, "Browser downloads / Save As", () => Current?.View?.CoreWebView2?.OpenDefaultDownloadDialog());
+            find.Visible = false;
+            find.BackColor = Color.FromArgb(36,40,49);find.ForeColor = Color.White;find.BorderStyle=BorderStyle.FixedSingle;
+            AddMenu(actions, "Find text on page", () => {find.Visible=true;find.Focus();});
             tools.Items.Add(find);
             find.AccessibleName = "Find text on page";
             find.KeyDown += async (s, e) => { if (e.KeyCode == Keys.Enter) { await FindText(); e.SuppressKeyPress = true; } };
-            AddButton("Find", async () => await FindText());
+
             var bar = new StatusStrip();
             bar.Items.Add(status);
             bar.Items.Add(progress);
             Controls.Add(tabs);
-            Controls.Add(tools);
+            tabs.SetToolbar(tools);
+            tools.Layout += (s,e) => FitAddress();
+            Resize += (s,e) => FitAddress();
             Controls.Add(bar);
             tabs.SelectedIndexChanged += async (s, e) => {
                 try { await ActivateTab(); }
                 catch (Exception) { status.Text = "This tab could not start. Refresh or open it externally."; }
             };
-            tabs.MouseDown += (s, e) => {
-                if (e.Button != MouseButtons.Middle) return;
-                for (int i = 0; i < tabs.TabCount; i++)
-                    if (tabs.GetTabRect(i).Contains(e.Location)) { CloseTab((BrowserTab)tabs.TabPages[i].Tag); break; }
-            };
             client.DefaultRequestHeaders.Add("X-SceneTrace", "local");
             client.DefaultRequestHeaders.Add("X-SceneTrace-Desktop", Environment.GetEnvironmentVariable("SCENETRACE_DESKTOP_TOKEN"));
-            client.Timeout = TimeSpan.FromSeconds(15);
+            client.Timeout = TimeSpan.FromSeconds(65);
             var eventName = Environment.GetEnvironmentVariable("SCENETRACE_FOCUS_EVENT");
             if (!String.IsNullOrEmpty(eventName)) focusEvent = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
-            activity.Tick += (s, e) => {
+            activity.Tick += async (s, e) => {
                 if (focusEvent?.WaitOne(0) == true) { WindowState = FormWindowState.Normal; Show(); Activate(); }
+                await PumpDownloads();
             };
             Shown += async (s, e) => await StartBrowser();
             FormClosing += async (s, e) => {
@@ -150,6 +163,22 @@ namespace SceneTrace
                 focusEvent?.Dispose();
                 client.Dispose();
             };
+        }
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try{int dark=1;if(DwmSetWindowAttribute(Handle,20,ref dark,4)!=0)DwmSetWindowAttribute(Handle,19,ref dark,4);}catch(Exception){}
+        }
+
+        private bool fittingAddress;
+        private void FitAddress()
+        {
+            if(fittingAddress || tools.Width<300)return;
+            fittingAddress=true;
+            try{int occupied=tools.Padding.Horizontal+28;foreach(ToolStripItem item in tools.Items)if(item!=address && item.Available)occupied+=item.Width+item.Margin.Horizontal;address.Width=Math.Max(160,tools.Width-occupied);}finally{fittingAddress=false;}
         }
 
         private BrowserTab Current => tabs.SelectedTab?.Tag as BrowserTab;
@@ -171,12 +200,16 @@ namespace SceneTrace
             try
             {
                 Directory.CreateDirectory(profile);
-                environment = await CoreWebView2Environment.CreateAsync(null, profile);
+                var browserOptions = new CoreWebView2EnvironmentOptions();
+                if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")) && !String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_QA_DOWNLOAD_PORT")))
+                    browserOptions.AdditionalBrowserArguments = "--host-resolver-rules=\"MAP download.scenetrace.test 127.0.0.1\"";
+                environment = await CoreWebView2Environment.CreateAsync(null, profile, browserOptions);
                 environment.BrowserProcessExited += (sender, eventArgs) => browserExited.TrySetResult(true);
                 appTab = CreateTab(appOrigin, true);
                 tabs.SelectedTab = appTab.Page;
                 await EnsureTab(appTab);
                 await Post("desktop/event", new { action = "ready", runtime = environment.BrowserVersionString });
+                await PumpDownloads();
                 activity.Start();
                 if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("SCENETRACE_BROWSER_REPORT")))
                     await RunChecks();
@@ -193,7 +226,7 @@ namespace SceneTrace
 
         private BrowserTab CreateTab(string value, bool trusted = false)
         {
-            var tab = new BrowserTab { Pending = value, Trusted = trusted, Page = new TabPage(trusted ? "SceneTrace" : "New tab") };
+            var tab = new BrowserTab { Pending = value, Trusted = trusted, Page = new Panel { Text = trusted ? "SceneTrace" : "New tab" } };
             tab.Page.Tag = tab;
             tab.Page.BackColor = BackColor;
             openTabs.Add(tab);
@@ -213,8 +246,10 @@ namespace SceneTrace
             if (environment == null || closing) return;
             var selected = Current;
             if (selected == null) return;
-            foreach (var other in openTabs.Where(t => t != selected && t.View?.CoreWebView2 != null))
+            foreach (var other in openTabs.Where(t => t != selected && t.View?.CoreWebView2 != null).ToArray())
             {
+                if (selected != Current || selected.Closed) return;
+                if (other.Closed || other.View == null) continue;
                 other.View.Visible = false;
                 if (!other.Trusted)
                 {
@@ -222,13 +257,13 @@ namespace SceneTrace
                 }
             }
             await EnsureTab(selected);
-            if (selected.Closed || selected.View == null) return;
+            if (selected != Current || selected.Closed || selected.View?.CoreWebView2 == null) return;
             selected.View.Visible = true;
             try { selected.View.CoreWebView2.Resume(); } catch (Exception) { }
             UpdateChrome(selected);
         }
 
-        private async Task EnsureTab(BrowserTab tab)
+        private async Task EnsureTab(BrowserTab tab, bool navigate = true)
         {
             while (tab.Creating && !tab.Closed) await Task.Delay(20);
             if (tab.Closed || tab.View != null) return;
@@ -249,15 +284,35 @@ namespace SceneTrace
                 core.Settings.IsStatusBarEnabled = false;
                 core.Settings.IsPasswordAutosaveEnabled = false;
                 core.Settings.IsGeneralAutofillEnabled = false;
-                core.NewWindowRequested += (s, e) => { e.Handled = true; Open(e.Uri, true); };
-                core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Deny; };
-                core.DownloadStarting += (s, e) => {
-                    if (tab.Trusted) return;
-                    e.Cancel = true;
-                    SendToApp("inspect", e.DownloadOperation.Uri);
+                core.NewWindowRequested += async (s, e) => {
+                    if (tab.Trusted) {e.Handled=true;if(AllowedWebsite(e.Uri))Open(e.Uri,true);return;}
+                    if (BlockPopup(tab,e)) {e.Handled=true;return;}
+                    if (e.Uri != "about:blank" && !AllowedWebsite(e.Uri)) {e.Handled=true;return;}
+                    e.Handled=true;
+                    var deferred=e.GetDeferral();
+                    try {
+                        var popup=CreateTab(e.Uri);
+                        await EnsureTab(popup,false);
+                        if (tab.Closed || popup.Closed || popup.View?.CoreWebView2 == null) { CloseTab(popup); return; }
+                        e.NewWindow=popup.View.CoreWebView2;
+                        e.Handled=true;
+                        tabs.SelectedTab=popup.Page;
+                    } catch(Exception) {status.Text="The popup could not open. Retry its button or open this page externally.";}
+                    finally {deferred.Complete();}
                 };
+                core.PermissionRequested += (s, e) => {
+                    // Preserve WebView2's download permission flow. Denying every
+                    // permission silently blocked a site's second automatic file.
+                    if(e.PermissionKind==CoreWebView2PermissionKind.MultipleAutomaticDownloads || e.PermissionKind==CoreWebView2PermissionKind.FileReadWrite)
+                        e.State=CoreWebView2PermissionState.Default;
+                    else e.State = CoreWebView2PermissionState.Deny;
+                };
+                core.DownloadStarting += (s, e) => TrackDownload(tab, e);
+                core.WebResourceResponseReceived += (s, e) => ObserveMedia(tab, e);
                 core.NavigationStarting += (s, e) => {
-                    bool allowed = tab.Trusted ? IsApp(e.Uri) : AllowedWebsite(e.Uri);
+                    if (BlockRedirect(tab,e)) { e.Cancel=true; return; }
+                    if (!tab.Trusted && !e.IsRedirected) { detected.Remove(tab); videoElements.Remove(tab); playingMedia.Remove(tab); blockedRequests[tab] = 0; UpdateDetector(); }
+                    bool allowed = tab.Trusted ? IsApp(e.Uri) : e.Uri == "about:blank" || AllowedWebsite(e.Uri);
                     if (!allowed)
                     {
                         e.Cancel = true;
@@ -274,11 +329,13 @@ namespace SceneTrace
                 };
                 core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
                 core.WebResourceRequested += (s, e) => {
+                    if (!tab.Trusted && BlockResource(tab, e.Request.Uri, e.ResourceContext)) { e.Response = environment.CreateWebResourceResponse(new MemoryStream(), 403, "Blocked by SceneTrace protection", "Content-Type: text/plain"); return; }
                     if (!tab.Trusted && IsLocalResource(e.Request.Uri))
                         e.Response = environment.CreateWebResourceResponse(new MemoryStream(), 403, "Local access blocked", "Content-Type: text/plain");
                 };
                 core.NavigationCompleted += async (s, e) => {
                     tab.Loading = false;
+                    if (!tab.Trusted && e.IsSuccess) { await ApplyCosmeticFilters(tab); await ScanMedia(tab); }
                     if (tab.Closed) return;
                     tab.Page.Text = tab.Trusted ? "SceneTrace" : ShortTitle(core.DocumentTitle);
                     UpdateChrome(tab);
@@ -293,7 +350,8 @@ namespace SceneTrace
                 core.SourceChanged += (s, e) => UpdateChrome(tab);
                 core.ProcessFailed += (s, e) => { status.Text = "This browser tab stopped. Press Refresh to restore it."; tab.Loading = false; };
                 if (tab.Trusted) core.WebMessageReceived += ReceiveMessage;
-                core.Navigate(tab.Pending);
+                if (!tab.Trusted) await InstallMediaObserver(tab);
+                if (navigate && !tab.Closed) core.Navigate(tab.Pending);
             }
             catch { view.Dispose(); tab.View = null; throw; }
             finally { tab.Creating = false; }
@@ -332,6 +390,8 @@ namespace SceneTrace
             if (tab != Current || tab.Closed) return;
             address.Text = tab.Trusted ? "" : tab.View?.CoreWebView2?.Source ?? tab.Pending;
             progress.Visible = tab.Loading;
+            UpdateDetector();
+            UpdateShieldChrome();
             status.Text = tab.Trusted ? "SceneTrace · private on this PC" : tab.Loading ? "Loading website…" : address.Text;
         }
 
@@ -412,16 +472,33 @@ namespace SceneTrace
 
         private void CloseTab(BrowserTab tab)
         {
-            if (tab == null || tab.Trusted) return;
+            if (tab == null || tab.Trusted || tab.Closed || tab.DownloadOnly) return;
+            var closedUrl=tab.View?.CoreWebView2?.Source ?? tab.Pending;
+            if (AllowedWebsite(closedUrl)) { closedTabUrls.Add(closedUrl); if(closedTabUrls.Count>20)closedTabUrls.RemoveAt(0); }
+            if (nativeTransfers.Values.Any(t=>t.Tab==tab && (t.Operation.State==CoreWebView2DownloadState.InProgress || t.Operation.CanResume)))
+            {
+                tab.DownloadOnly=true;
+                tabs.TabPages.Remove(tab.Page);
+                status.Text="Tab closed. Its download continues in Download Center.";
+                return;
+            }
             DisposeTab(tab);
             openTabs.Remove(tab);
             tabs.TabPages.Remove(tab.Page);
             tab.Page.Dispose();
         }
 
+        private void RestoreClosedTab()
+        {
+            if (closedTabUrls.Count==0) return;
+            int last=closedTabUrls.Count-1;
+            string value=closedTabUrls[last];closedTabUrls.RemoveAt(last);Open(value,true);
+        }
+
         private void DisposeTab(BrowserTab tab)
         {
             tab.Closed = true;
+            detected.Remove(tab); videoElements.Remove(tab); playingMedia.Remove(tab); blockedRequests.Remove(tab); scanning.Remove(tab);
             tab.View?.Dispose();
             tab.View = null;
         }
@@ -439,7 +516,8 @@ namespace SceneTrace
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == (Keys.Control | Keys.L)) { address.Focus(); address.SelectAll(); return true; }
-            if (keyData == (Keys.Control | Keys.F)) { find.Focus(); find.SelectAll(); return true; }
+            if (keyData == (Keys.Control | Keys.F)) { find.Visible=true;find.Focus(); find.SelectAll(); return true; }
+            if (keyData == (Keys.Control | Keys.Shift | Keys.T)) { RestoreClosedTab(); return true; }
             if (keyData == (Keys.Control | Keys.W)) { CloseTab(Current); return true; }
             if (keyData == (Keys.Control | Keys.T)) { Open("https://www.wikipedia.org/", true); return true; }
             if (keyData == Keys.F5) { Reload(); return true; }

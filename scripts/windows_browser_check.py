@@ -4,10 +4,13 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import time
 import urllib.request
 import psutil
+from native_download_fixture import start_fixture
+fixture_server,fixture_bytes=start_fixture()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exe', default='dist/SceneTrace/SceneTrace.exe')
@@ -25,12 +28,18 @@ def post(address, path, body):
 
 
 with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_errors=True) as profile:
+    fixture_root = Path(profile)/'fixtures'
+    shutil.copytree('tests/browser-fixtures',fixture_root)
+    import imageio_ffmpeg
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-f','lavfi','-i','color=c=blue:s=96x64:r=10','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',str(fixture_root/'observer.mp4')],check=True)
+    (fixture_root/'observer.html').write_text('<!doctype html><title>Dynamic frame fixture</title><script>setTimeout(()=>{const v=document.createElement("video");v.muted=true;v.autoplay=true;v.src="/observer.mp4";document.body.append(v);},300);</script><body></body>')
     reports = []
     for index in range(2):
         report = artifacts / ('cold.json' if index == 0 else 'warm.json')
         report.unlink(missing_ok=True)
         env = dict(os.environ, SCENETRACE_DATA=profile, SCENETRACE_BROWSER_REPORT=str(report),
-                   SCENETRACE_TEST_FIXTURES=str(Path('tests/browser-fixtures').resolve()))
+                   SCENETRACE_TEST_FIXTURES=str(fixture_root.resolve()),
+                   SCENETRACE_QA_DOWNLOAD_PORT=str(fixture_server.server_port))
         started = time.perf_counter()
         process = subprocess.Popen([str(exe)], env=env)
         address = None
@@ -59,12 +68,15 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                 assert any(r['id']=='upgrade:keep' for r in state['saved'])
                 assert state['settings']['record_history'] is False
                 assert post(address, 'history/list', {})['entries'] == []
-            deadline = time.monotonic() + 180
+            deadline = time.monotonic() + 300
             while time.monotonic() < deadline and not report.is_file():
                 if process.poll() is not None:
                     raise RuntimeError('The packaged application exited without native browser evidence.')
                 time.sleep(.2)
             result = json.loads(report.read_text())
+            if not result.get('success'):
+                detail=json.dumps(result).replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                print('::error title=Packaged WebView2 verification::'+detail[:6000],flush=True)
             assert result['success'], result
             result.update(backend_ready_seconds=round(backend_ready, 3), backend_rss_mib=round(backend_rss, 2))
             process.wait(timeout=20)
@@ -72,6 +84,7 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
             reports.append(result)
             report.write_text(json.dumps(result, indent=2))
         finally:
+            (artifacts/'fixture-requests.json').write_text(json.dumps(fixture_server.requests,indent=2))
             if process.poll() is None:
                 try:
                     if address: post(address, 'shutdown', {})
@@ -79,4 +92,9 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                 except (OSError, subprocess.TimeoutExpired):
                     process.kill()
                     process.wait()
+    fixture_server.shutdown();fixture_server.server_close()
+    import hashlib
+    for report in reports:
+        for transfer in report.get('controlledDownloads',[]):
+            if transfer.get('state')=='Completed':assert transfer['sha256']==hashlib.sha256(fixture_bytes).hexdigest(),transfer
     print(json.dumps({'runs':reports, 'persistence':'Saved item, disabled recording and individual deletion survive restart'}, indent=2))

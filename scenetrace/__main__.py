@@ -54,7 +54,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream(path.removeprefix('/media/'))
         asset='index.html' if path=='/' else path.lstrip('/')
         # Serve only flat bundled assets, never arbitrary local paths.
-        if asset not in ('index.html','style.css','app.js','watch.js','workspace.js','deep.js','icon.svg'):
+        if asset not in ('index.html','style.css','app.js','watch.js','workspace.js','deep.js','media-library.js','icon.svg'):
             return self.send(404,{'detail':'Not found.'})
         file=PUBLIC/asset
         return self.send(200,file.read_bytes(),MIME.get(file.suffix,'application/octet-stream'))
@@ -207,7 +207,9 @@ def main():
         from .media import worker
         try:
             print(json.dumps(worker(json.load(sys.stdin))),flush=True)
-        except Exception:
+        except Exception as error:
+            from .media import failure_detail
+            print(json.dumps({'failure':failure_detail(error)}), flush=True)
             sys.exit(1)
         return
     if '--check-runtime' in sys.argv:

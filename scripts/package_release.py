@@ -19,6 +19,9 @@ for name in ('README.md','START-HERE.txt','THIRD-PARTY-NOTICES.md'):
 shutil.copytree('docs',stage/'docs',dirs_exist_ok=True)
 licenses=stage/'licenses'
 licenses.mkdir(exist_ok=True)
+for source in Path("native/Filters").glob("*"):
+    if source.name.endswith((".txt.gz.b64", "-HaGeZi.txt")):
+        shutil.copyfile(source,licenses/source.name)
 for name in ('yt-dlp','imageio-ffmpeg','pyinstaller','beautifulsoup4','soupsieve','truststore'):
     d=importlib.metadata.distribution(name)
     for p in d.files:
@@ -34,6 +37,8 @@ for name in ('live-results.json', 'watch-results.json'):
 for name in ('cold.json', 'warm.json'):
     path = Path('artifacts/native-browser')/name
     if path.exists(): shutil.copyfile(path, stage/'docs'/('native-browser-'+name))
+benchmark=Path('artifacts/library-benchmark.json')
+if benchmark.exists():shutil.copyfile(benchmark,stage/'docs'/benchmark.name)
 path = Path('artifacts/v4-live/results.json')
 if path.exists(): shutil.copyfile(path, stage/'docs'/'website-live-results.json')
 sdk = Path.home()/'.nuget/packages/microsoft.web.webview2/1.0.3537.50'

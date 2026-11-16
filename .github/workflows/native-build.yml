@@ -1,7 +1,7 @@
 name: WebView2 native host compile
 on:
   push:
-    branches: [build/intelligent-browser-v4]
+    branches: [build/intelligent-browser-v4, build/browser-downloads-v4.1]
     paths: ['native/**', '.github/workflows/native-build.yml']
 permissions:
   contents: read

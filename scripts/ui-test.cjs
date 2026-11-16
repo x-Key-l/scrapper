@@ -78,6 +78,28 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await page.getByRole('button',{name:'Video Sources',exact:true}).click();
   await page.getByRole('button',{name:'Metadata & imports',exact:true}).click();
   await page.locator('#page .source-card').filter({has:page.getByRole('heading',{name:'TVmaze',exact:true})}).waitFor();
+  // Exercise the actual library UI and filesystem moves (catalog fixture, not a playback claim).
+  const mediaFolder=path.join(folder,'media');const movedFolder=path.join(folder,'organized');
+  await fs.mkdir(mediaFolder);await fs.mkdir(movedFolder);
+  await fs.writeFile(path.join(mediaFolder,'Forest Portal Ep 05.mp4'),Buffer.from('Local catalog move fixture'));
+  const post=async(route,body)=>{const response=await fetch(address+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-SceneTrace':'local'},body:JSON.stringify(body)});assert(response.ok,await response.clone().text());return response.json()};
+  const imported=await post('library/import',{folder:mediaFolder});
+  for(let i=0;i<100;i++){const data=await post('state',{});if(data.tasks[imported.id].status==='completed')break;await delay(100);}
+  await page.getByRole('button',{name:'Media Library',exact:true}).click();
+  await page.locator('.media-row').waitFor();
+  await page.locator('.media-row').getByRole('button',{name:'Edit',exact:true}).click();
+  await page.getByLabel('Category',{exact:true}).fill('Anime');
+  await page.getByLabel('Collection',{exact:true}).fill('Portal adventures');
+  await page.getByRole('button',{name:'Save details',exact:true}).click();
+  await page.locator('.media-row').filter({hasText:'Portal adventures'}).waitFor();
+  await page.locator('[data-media-select]').check();
+  await page.getByRole('button',{name:'Move selected files',exact:true}).click();
+  await page.getByLabel('Destination folder',{exact:true}).fill(movedFolder);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Move files',exact:true}).click();
+  await page.locator('.media-path').filter({hasText:movedFolder}).waitFor();
+  assert.equal(await fs.readFile(path.join(movedFolder,'Forest Portal Ep 05.mp4'),'utf8'),'Local catalog move fixture');
+  await page.screenshot({path:'artifacts/media-library.png',fullPage:true});
   for(const label of ['Anime','Quick Search','Video Sources','Link Analyzer','Downloads','Settings','Home']){
    await page.getByRole('button',{name:label,exact:true}).first().click();
    assert(await page.locator('h1').count()>0);

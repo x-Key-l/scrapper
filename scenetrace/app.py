@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import re
 import logging
 import os
 import platform
@@ -13,6 +14,7 @@ import uuid
 from pathlib import Path
 from . import __version__, discovery, importing, media, network, sources
 from .downloads import DownloadManager
+from .library import MediaLibrary
 from .viewing import Viewing
 from .search import SearchEngine
 from .sessions import SearchSessions
@@ -28,7 +30,8 @@ class App:
         self.proxy = proxy
         self.search = SearchEngine(self.store)
         self.search_sessions = SearchSessions(self)
-        self.downloads = DownloadManager(self.store, proxy)
+        self.library = MediaLibrary(self.store)
+        self.downloads = DownloadManager(self.store, proxy, completed=self.library.completed)
         self.analyses = {}
         self.viewing = Viewing(self)
         self.desktop_token = secrets.token_urlsafe(32)
@@ -43,12 +46,16 @@ class App:
         self.imports.mkdir(exist_ok=True)
 
     def state(self):
+        tasks = {k:dict(v) for k,v in list(self.tasks.items())}
         return dict(version=__version__, sources=self.store.sources(public=True), saved=self.store.saved(),
-                    history=self.store.history(), downloads=self.downloads.all(), tasks={k:dict(v) for k,v in list(self.tasks.items())},
+                    history=self.store.history(), downloads=self.downloads.all(), tasks=tasks,
                     bookmarks=self.store.bookmarks(),
                     settings={'destination':self.store.setting('destination',str(self.folder)), 'onboarded':self.store.setting('onboarded',False),
                               'brave_configured':bool(self.store.setting('brave_key','')), 'ffmpeg':bool(media.ffmpeg_path()),
                               'native_browser':self.native_browser,
+                              'filename_template':self.store.setting('filename_template', '%(title)s.%(ext)s'),
+                              'organize_by_source':self.store.setting('organize_by_source',True),
+                              'organize_by_series':self.store.setting('organize_by_series',False),
                               'record_history':self.store.setting('record_history', True),
                               'record_browsing':self.store.setting('record_browsing', True),
                               'history_retention_days':self.store.setting('history_retention_days', 0)})
@@ -180,6 +187,7 @@ class App:
 
     def register_analysis(self, result):
         key=uuid.uuid4().hex
+        result['formats'] = sorted(result.get('formats', []), key=lambda f: (not (f.get('video') and f.get('audio')), -(f.get('height') or 0), -(f.get('tbr') or 0)))
         self.analyses[key]=result
         for old,v in list(self.analyses.items()):
             if time.time()-v.get('analyzed',time.time())>3600:
@@ -211,10 +219,23 @@ class App:
         if not fmt:
             raise ValueError('Select an available quality and format.')
         dest=body.get('destination') or self.store.setting('destination',str(self.folder))
-        return self.downloads.add(a,fmt,dest,body.get('authorized') is True,body.get('output','original'))
+        selected = body.get('subtitles') or []
+        if isinstance(selected, str):
+            selected = [selected]
+        available = {track['language'] for track in a.get('subtitles', [])}
+        if not isinstance(selected, list) or any(not isinstance(lang, str) or lang not in available or not re.fullmatch(r'[\w-]+', lang) for lang in selected):
+            raise ValueError('Choose subtitles reported by the source.')
+        return self.downloads.add(dict(a, selected_subtitles=selected),fmt,dest,authorized=body.get('authorized') is True, output=body.get('output','original'))
 
     def settings(self, body):
-        for key in ('record_history', 'record_browsing'):
+        if 'filename_template' in body:
+            template = str(body['filename_template'])
+            fields = re.findall(r'%\(([^)]+)\)s', template)
+            if not template.strip() or len(template) > 500 or any(field not in ('title', 'height', 'ext', 'uploader') for field in fields):
+                raise ValueError('Use title, height, ext or uploader placeholders in the filename template.')
+            self.store.set_setting('filename_template', template)
+
+        for key in ('record_history', 'record_browsing','organize_by_source','organize_by_series'):
             if key in body:
                 if not isinstance(body[key], bool):
                     raise ValueError('History recording must be enabled or disabled.')
@@ -295,6 +316,31 @@ class App:
 
     def call(self, path, body):
         if path=='/api/state': return self.state()
+        if path=='/api/desktop/downloads': return self.downloads.browser_sync(body.get('updates',[]))
+        if path=='/api/desktop/download-settings':
+            return {'destination':self.store.setting('destination',str(self.folder)),
+                    'organize_by_source':self.store.setting('organize_by_source',True)}
+        if path=='/api/library/list': return self.library.listing(body.get('query',''),body.get('offset',0))
+        if path=='/api/library/edit': return self.library.edit(body.get('ids'),body.get('values',{}))
+        if path=='/api/library/import':
+            return self.task('Import media folder',lambda progress:self.library.import_folder(body.get('folder',''),progress))
+        if path=='/api/library/move':
+            result=self.library.move(body.get('ids',[]),body.get('destination',''),body.get('rename',''))
+            with self.downloads.lock:
+                for item in result['items']:
+                    job=self.downloads.items.get(item.get('job_id'))
+                    if job: job.update(path=item['path'],destination=str(Path(item['path']).parent))
+            return result
+        if path=='/api/library/open':
+            item=self.library.get(body.get('id'))
+            file=Path(item['path'])
+            if not file.is_file(): raise ValueError('The file is missing. Reconnect its drive or import its new location.')
+            target=str(file.parent if body.get('folder') else file)
+            if os.name=='nt': os.startfile(target)
+            else:
+                import subprocess
+                subprocess.Popen(['open' if platform.system()=='Darwin' else 'xdg-open',target])
+            return {'ok':True}
         if path=='/api/deep/start': return self.search_sessions.start(body)
         if path=='/api/deep/poll': return self.search_sessions.poll(body.get('id'))
         if path=='/api/deep/cancel': return self.search_sessions.cancel(body.get('id'))

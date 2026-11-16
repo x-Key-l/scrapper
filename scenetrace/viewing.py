@@ -235,15 +235,15 @@ class Viewing:
             info = self.peertube(value)
         elif episode['kind'] == 'website' and source:
             from . import websites
-            info = websites.resolve(source, value)
+            info = websites.resolve(source, value, self.app.proxy)
         elif urlsplit(value).hostname in ('archive.org', 'www.archive.org', 'commons.wikimedia.org'):
             info = media.analyze(value, self.app.proxy)
-            info['download_allowed'] = open_license(info.get('license'))
+            info['download_allowed'] = bool(info.get('formats'))
         else:
             info = {'formats': [], 'download_allowed': False}
-        formats = [f for f in info.get('formats', []) if f.get('method') == 'direct' and f.get('url')]
+        formats = [f for f in info.get('formats', []) if f.get('method') in ('direct', 'extractor')]
         playable = sorted(
-            [f for f in formats if f.get('video') and '.' + f.get('ext', '') in BROWSER_VIDEO],
+            [f for f in formats if f.get('method') == 'direct' and f.get('url') and f.get('video') and '.' + f.get('ext', '') in BROWSER_VIDEO],
             key=lambda f: (f.get('ext') == 'ogv', abs((f.get('height') or 480) - 360)),
         )
         output = dict(base, license=info.get('license', ''), attribution=', '.join(info.get('creators') or []))
@@ -270,11 +270,13 @@ class Viewing:
                 except (OSError, ValueError):
                     continue
             output['subtitles'] = subtitles
-        eligible = [f for f in formats if f.get('permitted', True)]
-        if info.get('download_allowed') and eligible:
+        eligible = list(formats)
+        # Missing license metadata is not a technical reason to hide a real file.
+        # Respect an explicit provider download setting when its official API has one.
+        if eligible and (episode['kind'] != 'peertube' or info.get('download_allowed')):
             analysis = dict(info, title=info.get('title') or episode['title'], url=value, formats=eligible, analyzed=time.time())
             safe = self.app.register_analysis(analysis)
-            output.update(analysis_id=safe['analysis_id'], formats=safe['formats'])
+            output.update(analysis_id=safe['analysis_id'], formats=safe['formats'], download_subtitles=safe.get('subtitles', []))
         return output
 
     def check(self, source, query, sample_url=''):

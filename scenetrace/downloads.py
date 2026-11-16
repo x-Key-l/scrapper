@@ -8,6 +8,8 @@ import subprocess
 import threading
 import time
 import uuid
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from . import network, media
 
@@ -22,8 +24,10 @@ def safe_name(value):
 
 
 class DownloadManager:
-    def __init__(self, store, proxy, workers=2):
+    def __init__(self, store, proxy, workers=2, completed=None):
         self.store, self.proxy = store, proxy
+        self.completed = completed or (lambda job: None)
+        self.browser_commands = []
         self.lock = threading.RLock()
         self.items = {j['id']:j for j in store.jobs()}
         self.events = {}
@@ -34,7 +38,13 @@ class DownloadManager:
             j.pop('_running', None)
             if j['status'] in ('queued','downloading','converting'):
                 j.update(status='paused', error='SceneTrace closed before this transfer finished. Choose Resume.')
+                if j.get('engine') == 'browser':
+                    j.update(status='failed', can_resume=False, error='The browser session ended. Open the source page to start this website download again.')
                 self.store.job(j)
+            if j.get('engine') == 'browser' and j['status'] not in ('completed','cancelled'):
+                j.update(status='failed',can_resume=False,error='The browser session ended. Open the source page to start this website download again.')
+                self.store.job(j)
+            if j['status'] == 'completed': self.completed(j)
         for n in range(workers):
             t = threading.Thread(target=self._loop, name=f'download-{n}', daemon=True)
             t.start()
@@ -51,22 +61,27 @@ class DownloadManager:
         self.store.job(j)
 
     def add(self, info, fmt, destination, authorized=False, output='original'):
-        if not authorized:
-            raise ValueError('Confirm that you own the media or the source and rights holder authorize this download.')
         if output not in ('original','mp4','mp3'):
             raise ValueError('Choose Original, MP4 or MP3.')
         if output != 'original' and not media.ffmpeg_path():
             raise ValueError('FFmpeg is unavailable. Choose Original format.')
+        fmt = dict(fmt)
+        if not re.fullmatch(r'[A-Za-z0-9]{1,16}', str(fmt.get('ext', ''))):
+            raise ValueError('Invalid media file extension.')
         folder = Path(destination).expanduser().resolve()
         if not folder.is_dir():
             raise ValueError('Choose an existing destination folder.')
+        from .library import destination_folder
+        folder = destination_folder(self.store, folder, info['url'], info['title'], info.get('category','Unsorted'))
         required = int(fmt.get('size') or 0) + 32*1024*1024
         if shutil.disk_usage(folder).free < required:
             raise ValueError('There is not enough free space in the destination.')
         key = uuid.uuid4().hex
         ext = fmt['ext'] if output == 'original' else output
-        name = safe_name(info['title'])
-        suffix = '.' + fmt['ext']
+        template = self.store.setting('filename_template', '%(title)s.%(ext)s')
+        fields = dict(title=info['title'], height=fmt.get('height') or 'original', ext=ext, uploader=', '.join(info.get('creators') or []))
+        name = safe_name(re.sub(r'%\((title|height|ext|uploader)\)s', lambda match: str(fields[match[1]]), template))
+        suffix = '.' + ext
         if name.lower().endswith(suffix.lower()):
             name = name[:-len(suffix)]
         final = folder / (name + '.' + ext)
@@ -83,8 +98,10 @@ class DownloadManager:
         else:
             raise ValueError('Could not allocate a free destination filename.')
         part = folder/('.scenetrace-'+key+'.'+fmt['ext'])
-        j = dict(id=key, title=info['title'], source=info['url'], extractor_url=info['url'],
-                 format=fmt, output=output, destination=str(folder), path=str(final), part=str(part),
+        j = dict(id=key, title=info['title'], source=info['url'], extractor_url=fmt.get('extractor_url') or info['url'], engine=fmt.get('method','extractor'),
+                 extension=ext, height=fmt.get('height'), category=info.get('category','Unsorted'),
+                 format=fmt, output=output, subtitles=info.get('selected_subtitles', []),
+                 subtitle_tracks=info.get('subtitles', []), metadata={k:info.get(k) for k in ('title','url','creators','duration','license')}, destination=str(folder), path=str(final), part=str(part),
                  temporary=str(part)+'.converted.'+ext, status='queued', bytes=0, total=fmt.get('size'),
                  speed=None, eta=None, progress=None, error='', created=time.time(), etag='')
         with self.lock:
@@ -99,6 +116,22 @@ class DownloadManager:
             j = self.items.get(key)
             if not j:
                 raise ValueError('Download not found.')
+            if action == 'remove':
+                if j['status'] not in ('completed','failed','cancelled') or j.get('_running'):
+                    raise ValueError('Finish or cancel this transfer before removing its history.')
+                with self.store.db() as c: c.execute('DELETE FROM jobs WHERE id=?',(key,))
+                self.items.pop(key)
+                self.events.pop(key,None)
+                return {'ok':True}
+            if j.get('engine') == 'browser':
+                if action not in ('pause','resume','retry','cancel'):
+                    raise ValueError('Unknown download action.')
+                if action in ('resume','retry') and not j.get('can_resume'):
+                    raise ValueError('This browser transfer cannot resume. Open its source page to download again.')
+                if j['status'] in ('completed','cancelled'):
+                    raise ValueError('This download has finished.')
+                self.browser_commands.append({'id':key,'action':action})
+                return self.public(j)
             if action in ('pause','cancel') and j['status'] not in ('completed','cancelled'):
                 j['status'] = 'paused' if action == 'pause' else 'cancelled'
                 self.events.setdefault(key, threading.Event()).set()
@@ -133,9 +166,9 @@ class DownloadManager:
                 key = self.queue.get(timeout=.25)
             except queue.Empty:
                 continue
-            j = self.items[key]
             with self.lock:
-                if j['status'] != 'queued':
+                j = self.items.get(key)
+                if not j or j['status'] != 'queued':
                     self.queue.task_done()
                     continue
                 j['_running'] = True
@@ -155,7 +188,9 @@ class DownloadManager:
                     original = Path(j['temporary'])
                 os.replace(original, j['path'])
                 j.update(status='completed', bytes=Path(j['path']).stat().st_size, progress=100, eta=0)
+                self._sidecars(j)
                 self._cleanup(j, reserve=False)
+                self.completed(j)
             except InterruptedError:
                 if j['status'] not in ('cancelled','paused'):
                     j['status'] = 'paused'
@@ -228,7 +263,7 @@ class DownloadManager:
             conn.close()
 
     def _extractor(self, j):
-        req = dict(url=j['extractor_url'], proxy=self.proxy, download=True, format_id=j['format']['id'], output=j['part'])
+        req = dict(url=j['extractor_url'], proxy=self.proxy, download=True, subtitles=j.get('subtitles', []), format_id=j['format'].get('extractor_id', j['format']['id']), output=j['part'])
         proc = subprocess.Popen(media.worker_args(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         proc.stdin.write(json.dumps(req))
@@ -237,9 +272,12 @@ class DownloadManager:
             for line in proc.stdout:
                 try:
                     d = json.loads(line)
+                    if d.get('failure'):
+                        j['failure'] = d['failure']['code']
+                        j['error'] = d['failure']['message']
                     if 'downloaded_bytes' in d:
                         j.update(bytes=d.get('downloaded_bytes') or 0, total=d.get('total_bytes') or d.get('total_bytes_estimate'), speed=d.get('speed'), eta=d.get('eta'))
-                        j['progress'] = 100*j['bytes']/j['total'] if j.get('total') else None
+                        j['progress'] = min(99, 100*j['bytes']/j['total']) if j.get('total') else None
                         self.persist(j)
                 except (ValueError, TypeError):
                     pass
@@ -251,31 +289,88 @@ class DownloadManager:
                 self.events[j['id']].wait(.2)
             reader.join(timeout=2)
             if proc.returncode:
-                raise ValueError('The source could not deliver this format. Analyze again, select another format or open the official page.')
+                raise ValueError(j.get('error') or 'The source could not deliver this format. Refresh the video or use its ordinary website download.')
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
+
+    def _sidecars(self, j):
+        try:
+            if any(not isinstance(lang, str) or not re.fullmatch(r'[\w-]+', lang) for lang in j.get('subtitles', [])):
+                raise ValueError('Invalid subtitle language.')
+            metadata = j.get('metadata') or {}
+            root = ET.Element('movie')
+            for key, tag in (('title','title'),('url','source'),('creators','uploader'),('duration','duration'),('license','license')):
+                value = metadata.get(key)
+                if value:
+                    ET.SubElement(root, tag).text = ', '.join(value) if isinstance(value, list) else str(value)
+            if len(root):
+                sidecar = Path(j['path']).with_suffix('.nfo')
+                if sidecar.exists():
+                    sidecar = Path(j['path'] + '.nfo')
+                with sidecar.open('xb') as out:
+                    out.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+            if j['format'].get('method') == 'direct':
+                for track in j.get('subtitle_tracks', []):
+                    if track.get('language') not in j.get('subtitles', []) or not track.get('url'):
+                        continue
+                    content, mime, final = network.fetch(track['url'], limit=4*1024*1024)
+                    suffix = 'vtt' if content.lstrip(b'\xef\xbb\xbf \r\n').startswith(b'WEBVTT') else 'srt'
+                    destination = Path(j['path'] + '.' + track['language'] + '.' + suffix)
+                    with destination.open('xb') as out:
+                        out.write(content)
+            for lang in j.get('subtitles', []):
+                for subtitle in Path(j['part']).parent.glob(Path(j['part']).stem + '.' + lang + '.*'):
+                    destination = Path(j['path'] + '.' + lang + subtitle.suffix)
+                    with destination.open('xb') as out:
+                        out.write(subtitle.read_bytes())
+                    subtitle.unlink()
+        except (OSError, ValueError) as exc:
+            j['notice'] = 'Media completed; sidecar could not be saved: ' + str(exc)
 
     def _convert(self, j):
         j['status'] = 'converting'
         self.persist(j)
         args = [media.ffmpeg_path(),'-nostdin','-hide_banner','-loglevel','error','-y',
                 '-protocol_whitelist','file,pipe','-i',j['part'],'-threads','2']
-        args += ['-vn','-c:a','libmp3lame','-q:a','2'] if j['output']=='mp3' else ['-c:v','libx264','-preset','veryfast','-crf','23','-c:a','aac','-movflags','+faststart']
+        copy = False
+        probe = shutil.which('ffprobe')
+        sibling = Path(media.ffmpeg_path()).with_name('ffprobe.exe' if os.name == 'nt' else 'ffprobe')
+        if sibling.is_file():
+            probe = str(sibling)
+        if j['output'] == 'mp4' and probe:
+            try:
+                result = subprocess.run([probe, '-v', 'error', '-protocol_whitelist', 'file,pipe', '-show_streams', '-show_format', '-of', 'json', j['part']],
+                                        capture_output=True, text=True, timeout=15,
+                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                if result.returncode == 0:
+                    data = json.loads(result.stdout)
+                    streams = data.get('streams', [])
+                    copy = bool(streams) and any(x in data.get('format', {}).get('format_name', '').split(',') for x in ('mp4', 'mpegts')) and all(
+                        stream.get('codec_name') in ('h264', 'aac') for stream in streams)
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass  # Optional optimization; encoding remains available.
+        args += (['-vn','-c:a','libmp3lame','-q:a','2'] if j['output']=='mp3' else
+                 ['-c','copy','-movflags','+faststart'] if copy else
+                 ['-c:v','libx264','-preset','veryfast','-crf','23','-c:a','aac','-movflags','+faststart'])
         args += [j['temporary']]
-        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        errors = tempfile.TemporaryFile(mode='w+t', encoding='utf-8')
+        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=errors,
                                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         try:
             while proc.poll() is None:
                 self._check(j)
                 self.events[j['id']].wait(.2)
             if proc.returncode:
-                raise ValueError('Conversion failed. Retry with Original format.')
+                errors.seek(0)
+                detail = next((line.strip() for line in reversed(errors.read().splitlines()) if line.strip()), 'No FFmpeg diagnostic was returned.')
+                raise ValueError('Conversion failed. ' + media.failure_detail(detail)['message'])
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
+            errors.close()
 
     def close(self):
         self.stopping.set()
@@ -283,3 +378,30 @@ class DownloadManager:
             e.set()
         for t in self.threads:
             t.join(timeout=4)
+
+    def browser_sync(self, updates):
+        """Only the authenticated native host calls this; no browser cookies cross it."""
+        with self.lock:
+            for update in updates:
+                key=str(update.get('id',''))
+                if not re.fullmatch(r'[a-f0-9]{32}', key): raise ValueError('Invalid browser transfer identifier.')
+                status=update.get('status')
+                if status not in ('downloading','paused','completed','cancelled','failed'): raise ValueError('Invalid browser transfer state.')
+                job=self.items.get(key)
+                if job and job.get('engine')!='browser': raise ValueError('Transfer engine cannot change.')
+                was_complete=job and job['status']=='completed'
+                job=dict(job or {},id=key,engine='browser',created=(job or {}).get('created',time.time()))
+                for field in ('title','source','path','status','bytes','total','speed','eta','can_resume','error','failure'):
+                    if field in update: job[field]=update[field]
+                job['destination']=str(Path(job['path']).parent)
+                job['extension']=Path(job['path']).suffix.lstrip('.')
+                job['progress']=100 if status=='completed' else (min(100,100*job['bytes']/job['total']) if job.get('total') else None)
+                if status=='completed' and not was_complete:
+                    file=Path(job['path'])
+                    if not file.is_file() or file.stat().st_size!=job['bytes']:
+                        raise ValueError('The browser completion file does not match the reported transfer.')
+                    self.completed(job)
+                self.items[key]=job
+                self.persist(job)
+            commands,self.browser_commands=self.browser_commands,[]
+            return {'commands':commands}
