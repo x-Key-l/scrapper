@@ -34,6 +34,14 @@ def fixture_server(fixture_video):
         def do_GET(self):self.respond(True)
         def respond(self,body):
             received.append(dict(self.headers))
+            if self.path == '/subtitle.vtt':
+                content=b'WEBVTT\n\n00:00.000 --> 00:00.500\nAuthorized fixture\n'
+                self.send_response(200)
+                self.send_header('Content-Type','text/vtt')
+                self.send_header('Content-Length',str(len(content)))
+                self.end_headers()
+                if body:self.wfile.write(content)
+                return
             if self.path == '/throttled.mp4' and len(received) == 1:
                 self.send_response(429)
                 self.send_header('Retry-After', '1')
@@ -250,3 +258,19 @@ def test_format_compatibility_does_not_invent_container_restrictions():
     assert media.failure_detail('SSL: CERTIFICATE_VERIFY_FAILED')['code']=='certificate'
     assert media.failure_detail('unrecognized extraction failure https://secret/?token=private')['code']=='extraction'
     assert 'private' not in str(media.failure_detail('unrecognized extraction failure https://secret/?token=private'))
+
+
+def test_real_transfer_subtitle_and_library(tmp_path,fixture_server,fixture_video):
+    value,_=fixture_server
+    store=Store(tmp_path/'state');library=MediaLibrary(store)
+    manager=DownloadManager(store,'proxy',workers=1,completed=library.completed)
+    try:
+        info=dict(title='Authorized fixture',url=value,selected_subtitles=['en'],subtitles=[dict(language='en',url=value.replace('sample.mp4','subtitle.vtt'))])
+        job=manager.add(info,dict(id='0',ext='mp4',method='direct',url=value),str(tmp_path),True)
+        done=wait(manager,job['id'])
+        assert Path(done['path']).read_bytes()==fixture_video
+        assert 'Authorized fixture' in Path(done['path']+'.en.vtt').read_text()
+        assert Path(done['path']).with_suffix('.nfo').is_file()
+        assert library.listing()['items'][0]['job_id']==job['id']
+        subprocess.run([media.ffmpeg_path(),'-v','error','-i',done['path'],'-f','null','-'],check=True,capture_output=True,timeout=15)
+    finally: manager.close()

@@ -74,6 +74,9 @@ with tempfile.TemporaryDirectory(prefix='scenetrace-native-qa-', ignore_cleanup_
                     raise RuntimeError('The packaged application exited without native browser evidence.')
                 time.sleep(.2)
             result = json.loads(report.read_text())
+            if not result.get('success'):
+                detail=json.dumps(result).replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                print('::error title=Packaged WebView2 verification::'+detail[:6000],flush=True)
             assert result['success'], result
             result.update(backend_ready_seconds=round(backend_ready, 3), backend_rss_mib=round(backend_rss, 2))
             process.wait(timeout=20)

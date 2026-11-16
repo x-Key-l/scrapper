@@ -1,4 +1,4 @@
-// Portable observer regression; native isolated-world wiring is a separate Windows gate.
+// Exercise the same isolated-world CDP setup as the native host.
 const {chromium}=require('playwright');
 const fs=require('node:fs/promises'), os=require('node:os'), path=require('node:path');
 const {execFileSync}=require('node:child_process');
@@ -18,9 +18,14 @@ const http=require('node:http'), assert=require('node:assert/strict');
  try {
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage();
-  await page.exposeFunction('__scenetraceMedia',s=>reports.push(JSON.parse(s)));
-  await page.addInitScript(await fs.readFile('native/MediaObserver.js','utf8'));
+  const cdp=await page.context().newCDPSession(page);
+  cdp.on('Runtime.bindingCalled',e=>reports.push(JSON.parse(e.payload)));
+  await cdp.send('Runtime.enable');
+  await cdp.send('Page.enable');
+  await cdp.send('Runtime.addBinding',{name:'__scenetraceMedia',executionContextName:'SceneTraceMedia'});
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:await fs.readFile('native/MediaObserver.js','utf8'),worldName:'SceneTraceMedia'});
   await page.goto(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.evaluate(()=>typeof globalThis.__scenetraceMedia),'undefined','Telemetry binding must stay outside the page world');
   await page.evaluate(port=>{const f=document.createElement('iframe');f.src=`http://localhost:${port}/frame`;document.body.append(f);},port);
   await page.waitForFunction(()=>document.querySelector('iframe')?.contentWindow);
   const frame=await (await page.$('iframe')).contentFrame();

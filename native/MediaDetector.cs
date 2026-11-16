@@ -41,6 +41,9 @@ namespace SceneTrace
                     UpdateDetector();
                 } catch (Exception) { /* Untrusted telemetry never invokes application commands. */ }
             };
+            // Page must be enabled before registering new-document scripts. Without
+            // it, isolated-world observation misses frame documents in WebView2.
+            await core.CallDevToolsProtocolMethodAsync("Page.enable", "{}");
             await core.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", json.Serialize(new {name="__scenetraceMedia",executionContextName="SceneTraceMedia"}));
             string script;
