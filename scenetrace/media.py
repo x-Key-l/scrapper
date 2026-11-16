@@ -31,9 +31,9 @@ def failure_detail(error):
         (('certificate verify failed', 'certificate_verify_failed', 'certificate validation failed'), 'certificate', 'Certificate validation failed. Check Windows certificates, the clock, and any HTTPS-inspecting antivirus or proxy.'),
         (('no space left', 'disk full'), 'disk_full', 'The destination disk is full. Free space and retry.'),
         (('permission denied',), 'permission', 'SceneTrace cannot write to the selected folder. Choose a writable folder.'),
-        (('http error 401', 'http error 403', 'status 403', 'sign in', 'login required'), 'access', 'The source refused this request. Open the original page in the browser; an ordinary website download remains available independently.'),
+        (('http error 401', 'http error 403', 'status 403', 'http 401', 'http 403', 'sign in', 'login required'), 'access', 'The source refused this request. Open the original page in the browser; an ordinary website download remains available independently.'),
         (('expired',), 'expired', 'The media URL expired. Refresh this video and try again.'),
-        (('http error 404', 'not found'), 'unavailable', 'This media address is no longer available. Refresh the original page.'),
+        (('http error 404', 'http 404', 'not found'), 'unavailable', 'This media address is no longer available. Refresh the original page.'),
         (('drm',), 'protected', 'The source reports protected media without a compatible download format.'),
         (('unsupported url', 'no video formats', 'unsupported transport'), 'unsupported', 'No compatible media format was found. Use the original page or its ordinary download button.'),
         (('timed out', 'connection', 'network', 'name resolution'), 'network', 'The network request failed. Check connectivity and retry.'),
@@ -69,7 +69,7 @@ def ffmpeg_path():
 def worker(request):
     import yt_dlp
     opts = dict(proxy=request['proxy'], quiet=True, no_warnings=True, noplaylist=True,
-                socket_timeout=12, retries=1, extractor_retries=0, geo_bypass=False,
+                socket_timeout=12, retries=2, extractor_retries=1, fragment_retries=3, concurrent_fragment_downloads=2, geo_bypass=False,
                 cachedir=False, plugin_dirs=[], js_runtimes={},
                 remote_components=set(), compat_opts={'no-certifi'}, playlistend=1, allowed_extractors=['default'],
                 ffmpeg_location=ffmpeg_path(), hls_prefer_native=True)
@@ -84,6 +84,8 @@ def worker(request):
             raise ValueError('Invalid format ID')
         if len(format_ids) == 2:
             opts['merge_output_format'] = 'mkv'
+        if request.get('subtitles'):
+            opts.update(writesubtitles=True, subtitleslangs=request['subtitles'], subtitlesformat='vtt/best')
         opts.update(format=fmt, outtmpl=request['output'], continuedl=True, nopart=False,
                     progress_hooks=[hook], overwrites=False,
                     postprocessor_args={'ffmpeg_i':['-protocol_whitelist','file,pipe']})
@@ -115,8 +117,8 @@ def worker(request):
                                 size=x.get('filesize') or x.get('filesize_approx'),
                                 label=x.get('format_note') or x.get('format') or x['ext'],
                                 video=x.get('vcodec') != 'none', audio=x.get('acodec') != 'none',
-                                protocol=x.get('protocol'), method='extractor'))
-        audio = next((f for f in reversed(formats) if f['audio'] and not f['video']), None)
+                                protocol=x.get('protocol'), tbr=x.get('tbr'), method='extractor'))
+        audio = next((f for f in sorted(formats, key=lambda f: -(f.get('tbr') or 0)) if f['audio'] and not f['video']), None)
         if audio and ffmpeg_path():
             combinations = []
             for f in formats:
@@ -128,7 +130,8 @@ def worker(request):
         return dict(title=text(info.get('title')), description=text(info.get('description')),
                     thumbnail=url(info.get('thumbnail')), creators=[text(info.get('uploader'))],
                     duration=info.get('duration'), license=text(info.get('license')), formats=formats,
-                    extractor=info.get('extractor_key'), unsupported_formats=unsupported)
+                    extractor=info.get('extractor_key'), unsupported_formats=unsupported,
+                    subtitles=[{'language': lang, 'label': lang} for lang in (info.get('subtitles') or {}) if re.fullmatch(r'[\w-]+', lang)])
 
 
 def analyze(value, proxy):

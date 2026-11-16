@@ -11,6 +11,7 @@ import pytest
 from scenetrace import media, network
 from scenetrace.downloads import DownloadManager
 from scenetrace.store import Store
+from scenetrace.library import MediaLibrary
 
 
 @pytest.fixture
@@ -105,7 +106,9 @@ def test_yt_dlp_worker_uses_validating_proxy_and_downloads_reported_format(tmp_p
         proxy_url='http://127.0.0.1:'+str(proxy.server_port)
         info=media.analyze(value,proxy_url)
         assert info['formats'] and info['extractor']=='Generic'
-        manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
+        store=Store(tmp_path/'state')
+        library=MediaLibrary(store)
+        manager=DownloadManager(store,proxy_url,workers=1,completed=library.completed)
         job=manager.add(info,info['formats'][0],str(tmp_path),True)
         done=wait(manager,job['id'])
         assert Path(done['path']).is_file()
@@ -218,7 +221,9 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
             if '--worker' in args or '-c' in args: kwargs['stderr']=log_file
             return original_popen(args,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',diagnostic_popen)
-        manager=DownloadManager(Store(tmp_path/'state'),proxy_url,workers=1)
+        store=Store(tmp_path/'state')
+        library=MediaLibrary(store)
+        manager=DownloadManager(store,proxy_url,workers=1,completed=library.completed)
         job=manager.add(info,fmt,str(tmp_path))
         try:
             done=wait(manager,job['id'])
@@ -229,6 +234,9 @@ def test_real_adaptive_manifest_download_and_decode(tmp_path, monkeypatch, conta
             log_file.close()
 
         subprocess.run([media.ffmpeg_path(),'-v','error','-i',done['path'],'-map','0:v:0','-map','0:a:0','-f','null','-'],check=True,capture_output=True,timeout=15)
+        indexed=library.listing()['items']
+        assert len(indexed)==1 and indexed[0]['path']==done['path']
+        assert indexed[0]['job_id']==job['id']
     finally:
         if manager: manager.close()
         proxy.shutdown();proxy.server_close();host.shutdown();host.server_close()

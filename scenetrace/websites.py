@@ -65,6 +65,24 @@ def same_origin(a, b):
     )
 
 
+MEDIA_ATTRS = ('src','href','data-src','data-video','data-url','content','data','srcset')
+MEDIA_RE = re.compile(r'https?://[^\s\"\'<>]+?\.(?:m3u8|mpd|mp4|webm|mkv|mp3|m4a)(?:\?[^\s\"\'<>]*)?', re.I)
+
+
+def media_candidates(doc, final):
+    found=[]
+    for node in doc.select('video,source,audio,iframe,embed,object,link[rel=preload],meta[property*=video],meta[itemprop*=contentUrl]'):
+        for attr in MEDIA_ATTRS:
+            value=relative(final,node.get(attr))
+            if value and urlsplit(value).hostname: found.append(value)
+    for script in doc.find_all('script'):
+        content=script.get_text().replace(r'\/', '/').replace(r'\u002F','/').replace(r'\u002f','/')
+        content=re.sub('%3a%2f%2f','://',content,flags=re.I)
+        found.extend(match.group(0) for match in MEDIA_RE.finditer(content))
+    return list(dict.fromkeys(found))
+
+
+
 def relative(base, value):
     return url(urljoin(base, str(value or ''))) if value else ''
 
@@ -367,11 +385,14 @@ def episodes(source, value):
     return sorted(rows.values(), key=lambda row: (row['number'] is None, float(row['number'] or 0)))
 
 
-def resolve(source, value):
+def resolve(source, value, proxy=''):
+    from . import media
     from .media import EXTENSIONS
     from .viewing import open_license, youtube_id
     p = urlsplit(value)
     ext = p.path.rsplit('.', 1)[-1].lower()
+    if ext in ('m3u8', 'mpd'):
+        return media.analyze(value, proxy)
     if ext in EXTENSIONS:
         return dict(formats=[dict(id='original', url=value, ext=ext, video=ext not in ('m4a', 'mp3', 'ogg', 'wav', 'flac'),
                                   audio=True, method='direct', label='Source file')], download_allowed=False)
@@ -381,6 +402,7 @@ def resolve(source, value):
     doc, final = fetch_page(value, cfg['render_browser'])
     media_links = [relative(final, node_value(node, '', ('src', 'href', 'content'))) for node in
                    select(doc, cfg['playback_selector'] or 'video[src], video source[src], meta[property="og:video:secure_url"]')]
+    media_links.extend(media_candidates(doc, final))
     structured = list(structured_videos(doc))
     media_links.extend(relative(final, video.get('contentUrl')) for video in structured)
     download_links = {relative(final, anchor.get('href')) for anchor in doc.select('a[download][href]')}
@@ -391,10 +413,25 @@ def resolve(source, value):
     files = []
     for href in dict.fromkeys(media_links + list(download_links)):
         ext = urlsplit(href).path.rsplit('.', 1)[-1].lower()
-        if ext in EXTENSIONS:
+        if ext in ('ts', 'm4s', 'cmfv', 'cmfa'):
+            continue  # Fragments are not complete videos.
+        if ext in ('m3u8', 'mpd'):
+            resolved = media.analyze(href, proxy)
+            files.extend(dict(f, id=str(len(files))+':'+f['id'], extractor_id=f['id'], extractor_url=href) for f in resolved.get('formats', []))
+        elif ext in EXTENSIONS:
             files.append(dict(id=str(len(files)), url=href, ext=ext, video=ext not in ('m4a', 'mp3', 'ogg', 'wav', 'flac'),
                               audio=True, method='direct', label='Website file',
                               permitted=open_license(license_url) or href in download_links))
+    if not files:
+        for frame in doc.select('iframe[src], embed[src], object[data]')[:3]:
+            candidate = relative(final, frame.get('src') or frame.get('data'))
+            if not candidate or candidate == value:
+                continue
+            try:
+                resolved = media.analyze(candidate, proxy)
+                files.extend(dict(f, id=str(len(files))+':'+f['id'], extractor_id=f['id'], extractor_url=candidate) for f in resolved.get('formats', []))
+            except (OSError, ValueError):
+                continue
     tracks = [dict(url=relative(final, node.get('src')), language=node.get('srclang') or 'und',
                    label=node.get('label') or 'Subtitles') for node in doc.select('video track[src]')]
     embeds = [relative(final, video.get('embedUrl')) for video in structured]
@@ -411,4 +448,4 @@ def resolve(source, value):
             break
     return dict(title=doc.title.get_text(strip=True) if doc.title else '', formats=files,
                 subtitles=tracks, license=license_url, embed=embed,
-                download_allowed=any(f['permitted'] for f in files))
+                download_allowed=any(f.get('permitted', False) for f in files))
