@@ -10,6 +10,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.*
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.*
@@ -47,7 +48,7 @@ class DeviceTest {
         fail("Timed out waiting for $label")
     }
     private fun typeUrl(url: String) {
-        onView(withContentDescription("Address or search")).perform(click(), replaceText(url), pressImeActionButton())
+        onView(withContentDescription("Address or search")).perform(click(), replaceText(url), closeSoftKeyboard(), pressImeActionButton())
     }
     private fun findWeb(v: View): WebView? {
         if (v is WebView) return v
@@ -61,7 +62,7 @@ class DeviceTest {
         val current = store.session().current
         current.url == fixture.base + path && current.title == path.removePrefix("/").replaceFirstChar { it.uppercase() }
     }
-    private fun clickLabel(label: String) { onView(withText(label)).perform(click()) }
+    private fun clickLabel(label: String) { onView(withText(label)).inRoot(isDialog()).perform(click()) }
     private fun clickIcon(label: String) { onView(withContentDescription(label)).perform(click()) }
 
     @Test fun browseSwitchRestoreAndReopen() {
@@ -128,7 +129,7 @@ class DeviceTest {
             SystemClock.sleep(600)
             assertFalse("/automatic" in fixture.requests)
             assertEquals(2, store.session().tabs.size)
-            assertNotEquals("doubleclick.net", Addresses.host(store.session().current.url))
+            assertNotEquals("ads.scorecardresearch.com", Addresses.host(store.session().current.url))
         }
     }
 
@@ -149,12 +150,15 @@ class DeviceTest {
     }
 
     @Test fun browserDownloadMatchesFixtureAfterTabClose() {
-        ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
-            typeUrl(fixture.base + "/one"); page("/one")
-            scenario.onActivity { js(it, "location.href='/file'") }
-            onView(withText("Download file?")).check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()))
+        ActivityScenario.launch(BrowserActivity::class.java).use {
+            typeUrl(fixture.base + "/download-link"); page("/download-link")
+            onView(isAssignableFrom(WebView::class.java)).perform(click())
+            waitFor("website attachment request") { "/file" in fixture.requests }
+            onView(withText("Download file?")).inRoot(isDialog())
+                .check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()))
             clickLabel("Download")
-            clickIcon("Tabs, 1 open"); clickIcon("Close One"); clickIcon("Close panel")
+            waitFor("transfer start") { transfers.list().any { it.stage.active } }
+            clickIcon("Tabs, 1 open"); clickIcon("Close Download-link"); clickIcon("Close panel")
             waitFor("completed file") { transfers.list().any { it.stage == Stage.SAVED } }
             val record = transfers.list().first { it.stage == Stage.SAVED }
             val bytes = ctx.contentResolver.openInputStream(transfers.uri(record.id)!!)!!.use { it.readBytes() }

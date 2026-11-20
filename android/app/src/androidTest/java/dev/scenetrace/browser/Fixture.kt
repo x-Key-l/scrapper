@@ -38,8 +38,9 @@ class Fixture : Closeable {
         }
         val title = path.removePrefix("/").replaceFirstChar { it.uppercase() }
         val body = when (path) {
+            "/download-link" -> "<a style='position:fixed;inset:0' href='/file'>Download fixture</a>"
             "/popup-link" -> "<a style='position:fixed;inset:0' target='_blank' href='/child'>Open child tab</a>"
-            "/ad-link" -> "<a style='position:fixed;inset:0' target='_blank' href='https://doubleclick.net/ad'>Advert</a>"
+            "/ad-link" -> "<a style='position:fixed;inset:0' target='_blank' href='https://ads.scorecardresearch.com/ad'>Advert</a>"
             else -> "<a href='/two'>Next page</a><a href='/file'>Download</a>"
         }
         val page = "<html><head><title>$title</title></head><body>$body</body></html>"
@@ -47,14 +48,20 @@ class Fixture : Closeable {
         val repeat = if (path == "/slow") 400 else 1
         val headers = buildString {
             append("HTTP/1.1 $status\r\nConnection: close\r\n")
-            if (redirect) append("Location: " + (if (path == "/redirect") "/file" else "https://doubleclick.net/ad") + "\r\n")
+            if (redirect) append("Location: " + (if (path == "/redirect") "/file" else "https://ads.scorecardresearch.com/ad") + "\r\n")
             append("Content-Length: ${payload.size * repeat}\r\n")
             if (binary) append("Content-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=fixture.bin\r\n")
             else append("Content-Type: text/html; charset=utf-8\r\n")
             append("\r\n")
         }
         out.write(headers.toByteArray())
-        repeat(repeat) { out.write(payload); out.flush(); if (repeat > 1) Thread.sleep(100) }
+        if (path == "/file") {
+            // Keep a real transfer in flight while the UI closes its originating tab.
+            for (offset in payload.indices step 1024) {
+                out.write(payload, offset, minOf(1024, payload.size - offset)); out.flush()
+                Thread.sleep(90)
+            }
+        } else repeat(repeat) { out.write(payload); out.flush(); if (repeat > 1) Thread.sleep(100) }
     }
     override fun close() { socket.close(); workers.shutdownNow() }
 }
