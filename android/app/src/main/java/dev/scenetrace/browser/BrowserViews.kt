@@ -131,7 +131,28 @@ class BrowserViews(private val ui: BrowserActivity, private val store: BrowserSt
             }
         }
         web.setDownloadListener { url, agent, disposition, mime, length ->
-            if (ui.isActive(tab)) ui.offerDownload(url, disposition, mime, agent, length)
+            if (ui.isActive(tab)) {
+                // Attachment navigations can start without replacing the visible document.
+                web.copyBackForwardList().currentItem?.let { item ->
+                    if (Addresses.host(item.url) != null) {
+                        tab.url = item.url
+                        tab.title = item.title.orEmpty()
+                        ui.pageChanged(tab)
+                    }
+                }
+                ui.offerDownload(url, disposition, mime, agent, length)
+            }
+        }
+        web.setOnLongClickListener {
+            val hit = web.hitTestResult
+            val link = hit.extra
+            if (link == null || Addresses.host(link) == null ||
+                hit.type !in setOf(WebView.HitTestResult.SRC_ANCHOR_TYPE, WebView.HitTestResult.IMAGE_TYPE)) {
+                false
+            } else {
+                ui.linkPanel(link, web.settings.userAgentString)
+                true
+            }
         }
         return web
     }
@@ -166,6 +187,7 @@ class BrowserViews(private val ui: BrowserActivity, private val store: BrowserSt
         web.webChromeClient = null
         web.webViewClient = WebViewClient()
         web.setDownloadListener(null)
+        web.setOnLongClickListener(null)
         web.destroy()
     }
     fun release() {
@@ -182,7 +204,7 @@ private object FilterBundle {
     @Synchronized fun get(context: android.content.Context): java.util.concurrent.Future<DomainRules> {
         val assets = context.applicationContext.assets
         return future ?: loader.submit<DomainRules> {
-            GZIPInputStream(assets.open("hagezi-light.txt.gz")).bufferedReader().useLines(DomainRules::read)
+            GZIPInputStream(assets.open("hagezi-light.rules")).bufferedReader().useLines(DomainRules::read)
         }.also { future = it; loader.shutdown() }
     }
 }

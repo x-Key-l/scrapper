@@ -33,9 +33,16 @@ jobs:
       - name: Check bundled filter and license against Windows source
         run: |
           set -o pipefail
-          base64 --decode ../native/Filters/light.txt.gz.b64 | cmp - app/src/main/assets/hagezi-light.txt.gz
+          base64 --decode ../native/Filters/light.txt.gz.b64 | cmp - app/src/main/assets/hagezi-light.rules
           cmp ../native/Filters/LICENSE-HaGeZi.txt app/src/main/assets/LICENSE-HaGeZi.txt
       - run: ./gradlew --stacktrace testDebugUnitTest assembleDebug assembleDebugAndroidTest
+      - name: Verify packaged rules and APK signature
+        run: |
+          set -o pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$apk" assets/hagezi-light.rules | cmp - app/src/main/assets/hagezi-light.rules
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$apk"
+          sha256sum "$apk" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: SceneTrace-Android-debug

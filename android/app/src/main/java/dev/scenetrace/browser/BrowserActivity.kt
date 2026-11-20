@@ -249,6 +249,9 @@ class BrowserActivity : ComponentActivity() {
                 if (saved) store.removeBookmark(page.url) else store.savePage(page, true)
                 notice(if (saved) "Bookmark removed" else "Bookmark saved")
             }
+            item(R.drawable.ic_download, "Download current URL") {
+                offerDownload(page.url, null, null, web?.settings?.userAgentString, -1)
+            }
             item(R.drawable.ic_external, "Open in external browser") { launch(Intent(Intent.ACTION_VIEW, Uri.parse(page.url))) }
         }
         item(R.drawable.ic_book, "Bookmarks") { pagesPanel(true) }
@@ -293,6 +296,12 @@ class BrowserActivity : ComponentActivity() {
             }
         }
         message("Uses the bundled HaGeZi Light domain list. Allowlist a site if a player or sign-in link stops working.")
+    } }
+
+    fun linkPanel(url: String, agent: String) { panel("Link") {
+        message(url)
+        item(R.drawable.ic_plus, "Open in new tab") { newTab(url) }
+        item(R.drawable.ic_download, "Download link") { offerDownload(url, null, null, agent, -1) }
     } }
 
     fun offerDownload(url: String, disposition: String?, mime: String?, agent: String?, length: Long) {
