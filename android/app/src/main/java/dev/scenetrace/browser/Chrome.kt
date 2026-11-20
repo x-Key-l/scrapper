@@ -58,15 +58,34 @@ internal fun Context.entry(symbol: Int, title: String, sub: String = "", action:
 internal class Sheet(val owner: Activity, title: String) {
     val dialog = Dialog(owner)
     val entries = owner.column()
+    private val wrap = owner.column()
+    private val scroll = ScrollView(owner)
     init {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val wrap = owner.column().apply { background = owner.shape(surface, 20); pad(12, 10) }
+        wrap.apply { background = owner.shape(surface, 20); pad(12, 10) }
         val heading = owner.row()
         heading.addView(owner.text(title, 23, bright, true).apply { pad(12, 8) }, LinearLayout.LayoutParams(0, WRAP, 1f))
         heading.addView(owner.icon(R.drawable.ic_stop, "Close panel") { dialog.dismiss() }, owner.dp(48), owner.dp(48))
         wrap.addView(heading)
-        wrap.addView(ScrollView(owner).apply { addView(entries); isFillViewport = false }, MATCH, WRAP)
+        wrap.addView(scroll.apply { addView(entries); isFillViewport = false }, MATCH, WRAP)
         dialog.setContentView(wrap)
+    }
+    fun list(size: Int, rowAt: (Int) -> View) {
+        if (scroll.parent === wrap) {
+            wrap.removeView(scroll)
+            scroll.removeView(entries)
+            wrap.addView(entries)
+        }
+        val list = ListView(owner).apply {
+            divider = null
+            adapter = object : BaseAdapter() {
+                override fun getCount() = size
+                override fun getItem(position: Int) = position
+                override fun getItemId(position: Int) = position.toLong()
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup) = rowAt(position)
+            }
+        }
+        wrap.addView(list, MATCH, WRAP)
     }
     fun show() {
         dialog.window?.apply {

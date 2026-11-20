@@ -9,6 +9,8 @@ import android.webkit.URLUtil
 import java.io.File
 
 enum class Stage { QUEUED, RUNNING, WAITING, SAVED, FAILED, CANCELLED, MISSING }
+val Stage.active get() = this == Stage.QUEUED || this == Stage.RUNNING || this == Stage.WAITING
+
 data class Transfer(val id: Long, val name: String, val stage: Stage, val bytes: Long = 0,
                     val total: Long = -1, val detail: String = "")
 
@@ -67,13 +69,14 @@ class Transfers(context: Context, private val store: BrowserStore) {
                     "System code " + number(DownloadManager.COLUMN_REASON) else "")
             }
         }
+        val recordedIds = records.mapTo(HashSet()) { it.id }
         return records.map { r -> if (r.stage == Stage.CANCELLED) r else live[r.id]?.copy(name = r.name) ?: r } +
-            live.values.filter { t -> records.none { it.id == t.id } }
+            live.values.filter { it.id !in recordedIds }
     }
 
     @Synchronized fun cancel(id: Long) {
         val record = list().firstOrNull { it.id == id } ?: return
-        if (record.stage !in setOf(Stage.QUEUED, Stage.RUNNING, Stage.WAITING)) return
+        if (!record.stage.active) return
         system.remove(id)
         store.writableDatabase.insertWithOnConflict("transfers", null, ContentValues().apply {
             put("id", id); put("name", record.name); put("cancelled", 1)

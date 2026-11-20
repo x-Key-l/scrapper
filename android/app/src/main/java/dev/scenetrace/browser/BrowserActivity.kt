@@ -22,6 +22,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 
@@ -255,7 +256,7 @@ class BrowserActivity : ComponentActivity() {
         item(R.drawable.ic_settings, "Settings") { settingsPanel() }
     } }
     private fun pagesPanel(bookmarks: Boolean) { panel(if (bookmarks) "Bookmarks" else "History") {
-        val pages = store.pages(bookmarks)
+        val pages = store.pages(bookmarks, if (bookmarks) -1 else 500)
         if (pages.isEmpty()) message(if (bookmarks) "Save a page from the browser menu." else "Visited pages appear here.")
         if (!bookmarks && pages.isNotEmpty()) item(R.drawable.ic_history, "Clear history") {
             AlertDialog.Builder(this@BrowserActivity).setMessage("Clear your browsing history?")
@@ -263,11 +264,13 @@ class BrowserActivity : ComponentActivity() {
                     store.clearHistory(); if (web == null) activate(); pagesPanel(false)
                 }.show()
         }
-        pages.forEach { p ->
-            val line = item(R.drawable.ic_globe, pageTitle(p), p.url) { navigate(p.url) }
+        if (pages.isNotEmpty()) list(pages.size) { index ->
+            val p = pages[index]
+            val line = entry(R.drawable.ic_globe, pageTitle(p), p.url) { dialog.dismiss(); navigate(p.url) }
             if (bookmarks) line.addView(icon(R.drawable.ic_stop, "Remove bookmark") {
                 dialog.dismiss(); store.removeBookmark(p.url); pagesPanel(true)
             }, dp(48), dp(48))
+            line
         }
     } }
     private fun settingsPanel() { panel("Settings") {
@@ -304,13 +307,12 @@ class BrowserActivity : ComponentActivity() {
     }
     private fun downloadsPanel() {
         val sheet = panel("Downloads") { message("Checking transfers…") }
-        lifecycleScope.launch {
-            var previous: List<Transfer>? = null
-            while (sheet.dialog.isShowing) {
-                if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                    val result = withContext(Dispatchers.IO) { runCatching { transfers.list() } }
+        val monitor = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                var previous: List<Transfer>? = null
+                while (sheet.dialog.isShowing) {
+                    val rows = withContext(Dispatchers.IO) { runCatching { transfers.list() }.getOrNull() }
                     if (!sheet.dialog.isShowing) break
-                    val rows = result.getOrNull()
                     if (rows == null || rows != previous) {
                         sheet.entries.removeAllViews()
                         previous = rows
@@ -318,10 +320,12 @@ class BrowserActivity : ComponentActivity() {
                         else if (rows.isEmpty()) sheet.message("Files you download from websites appear here.")
                         else rows.forEach { downloadRow(sheet, it) }
                     }
+                    if (rows?.none { it.stage.active } != false) break
+                    delay(1100)
                 }
-                delay(1100)
             }
         }
+        sheet.dialog.setOnDismissListener { monitor.cancel(); if (shown === sheet) shown = null }
     }
     private fun downloadRow(sheet: Sheet, transfer: Transfer) {
         val state = when (transfer.stage) {
@@ -343,7 +347,7 @@ class BrowserActivity : ComponentActivity() {
                 } ?: notice("File unavailable")
             }
         }
-        if (transfer.stage in setOf(Stage.QUEUED, Stage.RUNNING, Stage.WAITING)) {
+        if (transfer.stage.active) {
             line.addView(icon(R.drawable.ic_stop, "Cancel ${transfer.name}") {
                 AlertDialog.Builder(this).setMessage("Cancel ${transfer.name}?").setNegativeButton("Keep", null)
                     .setPositiveButton("Cancel download") { _, _ ->
