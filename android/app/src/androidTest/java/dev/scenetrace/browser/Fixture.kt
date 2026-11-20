@@ -11,6 +11,7 @@ import kotlin.concurrent.thread
 class Fixture : Closeable {
     private val socket = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
     private val workers = Executors.newCachedThreadPool()
+    val requests = java.util.concurrent.ConcurrentLinkedQueue<String>()
     val base = "http://127.0.0.1:${socket.localPort}"
     val file = ByteArray(48137) { (it % 251).toByte() }
     init {
@@ -25,6 +26,7 @@ class Fixture : Closeable {
         client.soTimeout = 5000
         val reader = client.getInputStream().bufferedReader()
         val path = reader.readLine()?.split(' ')?.getOrNull(1) ?: return
+        requests.add(path)
         while (!reader.readLine().isNullOrEmpty()) { /* consume request headers */ }
         val out = client.getOutputStream()
         val binary = path in listOf("/file", "/slow")
@@ -35,7 +37,12 @@ class Fixture : Closeable {
             else -> "200 OK"
         }
         val title = path.removePrefix("/").replaceFirstChar { it.uppercase() }
-        val page = "<html><head><title>$title</title></head><body><a href='/two'>Next page</a><a href='/file'>Download</a></body></html>"
+        val body = when (path) {
+            "/popup-link" -> "<a style='position:fixed;inset:0' target='_blank' href='/child'>Open child tab</a>"
+            "/ad-link" -> "<a style='position:fixed;inset:0' target='_blank' href='https://doubleclick.net/ad'>Advert</a>"
+            else -> "<a href='/two'>Next page</a><a href='/file'>Download</a>"
+        }
+        val page = "<html><head><title>$title</title></head><body>$body</body></html>"
         val payload = if (binary) file else page.toByteArray()
         val repeat = if (path == "/slow") 400 else 1
         val headers = buildString {

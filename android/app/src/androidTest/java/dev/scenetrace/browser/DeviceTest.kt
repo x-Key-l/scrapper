@@ -91,6 +91,47 @@ class DeviceTest {
         }
     }
 
+    @Test fun evictedTabRestoresItsOwnHistoryAfterRotation() {
+        ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
+            typeUrl(fixture.base + "/one"); page("/one")
+            scenario.onActivity { js(it, "location.href='/two'") }; page("/two")
+            for (path in listOf("/three", "/four", "/five")) {
+                scenario.onActivity { it.newTab(fixture.base + path) }; page(path)
+            }
+            scenario.onActivity {
+                it.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                it.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+            }
+            waitFor("landscape") {
+                ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            }
+            clickIcon("Tabs, 4 open"); clickLabel("Two")
+            clickIcon("Back"); page("/one")
+            clickIcon("Forward"); page("/two")
+        }
+    }
+
+    @Test fun shieldFiltersPopupsAndRedirectsInWebView() {
+        ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
+            typeUrl(fixture.base + "/popup-link"); page("/popup-link")
+            onView(isAssignableFrom(WebView::class.java)).perform(click())
+            page("/child")
+            assertEquals(2, store.session().tabs.size)
+            typeUrl(fixture.base + "/ad-link"); page("/ad-link")
+            onView(isAssignableFrom(WebView::class.java)).perform(click())
+            // Let the page's transient user activation expire before testing an automatic popup.
+            SystemClock.sleep(5500)
+            scenario.onActivity { js(it, "window.open('/automatic'); fetch('/attempted')") }
+            waitFor("automatic popup script executed") { "/attempted" in fixture.requests }
+            scenario.onActivity { js(it, "location.href='/ad-redirect'") }
+            waitFor("server redirect") { "/ad-redirect" in fixture.requests }
+            SystemClock.sleep(600)
+            assertFalse("/automatic" in fixture.requests)
+            assertEquals(2, store.session().tabs.size)
+            assertNotEquals("doubleclick.net", Addresses.host(store.session().current.url))
+        }
+    }
+
     @Test fun settingsHistoryAndBookmarksSurviveReopen() {
         store.engine = "Google"
         store.protection = false
