@@ -29,6 +29,8 @@ jobs:
         with:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' }}
       - run: sdkmanager "platforms;android-35" "build-tools;34.0.0"
       - name: Check bundled filter and license against Windows source
         run: |
