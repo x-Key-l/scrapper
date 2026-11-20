@@ -45,7 +45,7 @@ class DeviceTest {
             if (condition()) return
             SystemClock.sleep(150)
         } while (SystemClock.elapsedRealtime() < end)
-        fail("Timed out waiting for $label")
+        fail("Timed out waiting for $label. Session: ${store.session()}")
     }
     private fun typeUrl(url: String) {
         onView(withContentDescription("Address or search")).perform(click(), replaceText(url), closeSoftKeyboard(), pressImeActionButton())
@@ -68,11 +68,11 @@ class DeviceTest {
     @Test fun browseSwitchRestoreAndReopen() {
         ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
             typeUrl(fixture.base + "/one"); page("/one")
-            scenario.onActivity { js(it, "location.href='/two'") }; page("/two")
+            onView(isAssignableFrom(WebView::class.java)).perform(click()); page("/two")
             clickIcon("Browser menu"); clickLabel("Bookmark this page")
             clickIcon("Tabs, 1 open"); clickLabel("New tab")
             typeUrl(fixture.base + "/three"); page("/three")
-            clickIcon("Tabs, 2 open"); clickLabel("Two")
+            clickIcon("Tabs, 2 open"); clickLabel("Two"); page("/two")
             clickIcon("Back"); page("/one")
             clickIcon("Forward"); page("/two")
             clickIcon("Tabs, 2 open"); clickIcon("Close Two"); clickIcon("Close panel")
@@ -95,7 +95,7 @@ class DeviceTest {
     @Test fun evictedTabRestoresItsOwnHistoryAfterRotation() {
         ActivityScenario.launch(BrowserActivity::class.java).use { scenario ->
             typeUrl(fixture.base + "/one"); page("/one")
-            scenario.onActivity { js(it, "location.href='/two'") }; page("/two")
+            onView(isAssignableFrom(WebView::class.java)).perform(click()); page("/two")
             for (path in listOf("/three", "/four", "/five")) {
                 scenario.onActivity { it.newTab(fixture.base + path) }; page(path)
             }

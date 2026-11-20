@@ -74,6 +74,10 @@ class BrowserViews(private val ui: BrowserActivity, private val store: BrowserSt
                 if (Addresses.host(url) == null) return
                 tab.url = url
                 site = Addresses.host(url).orEmpty()
+                // A back/forward-cache traversal can restore a document without another full load.
+                view.copyBackForwardList().currentItem?.takeIf { it.url == url }?.title?.let {
+                    tab.title = it.take(400)
+                }
                 ui.pageChanged(tab)
             }
             override fun onPageFinished(view: WebView, url: String) {
@@ -93,6 +97,12 @@ class BrowserViews(private val ui: BrowserActivity, private val store: BrowserSt
             }
         }
         web.webChromeClient = object : WebChromeClient() {
+            override fun onReceivedTitle(view: WebView, title: String?) {
+                if (view.url == tab.url && !title.isNullOrBlank()) {
+                    tab.title = title.take(400)
+                    ui.pageChanged(tab)
+                }
+            }
             override fun onProgressChanged(view: WebView, progress: Int) { if (ui.isActive(tab)) ui.showProgress(progress) }
             override fun onCreateWindow(view: WebView, dialog: Boolean, gesture: Boolean, result: Message): Boolean {
                 if (!ui.isActive(tab) || pending.containsKey(tab.id)) return false

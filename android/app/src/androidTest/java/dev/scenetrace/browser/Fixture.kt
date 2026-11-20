@@ -38,6 +38,7 @@ class Fixture : Closeable {
         }
         val title = path.removePrefix("/").replaceFirstChar { it.uppercase() }
         val body = when (path) {
+            "/one" -> "<a style='position:fixed;inset:0' href='/two'>Next page</a>"
             "/download-link" -> "<a style='position:fixed;inset:0' href='/file'>Download fixture</a>"
             "/popup-link" -> "<a style='position:fixed;inset:0' target='_blank' href='/child'>Open child tab</a>"
             "/ad-link" -> "<a style='position:fixed;inset:0' target='_blank' href='https://ads.scorecardresearch.com/ad'>Advert</a>"
