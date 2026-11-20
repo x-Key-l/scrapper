@@ -1,0 +1,6 @@
+<resources>
+    <plurals name="tab_count">
+        <item quantity="one">%d tab</item>
+        <item quantity="other">%d tabs</item>
+    </plurals>
+</resources>
